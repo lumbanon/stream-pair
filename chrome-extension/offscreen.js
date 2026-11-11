@@ -18,6 +18,12 @@ function getWorker() {
       await worker.setParameters({
         tessedit_char_whitelist: '0123456789',
         tessedit_pageseg_mode: '7', // single text line
+        // Our crops carry no DPI; without this Tesseract logs
+        // "Estimating resolution as N" for every tile.
+        user_defined_dpi: '300',
+        // Send Tesseract's internal diagnostics (tprintf) nowhere instead of
+        // the console, where Chrome lists them as extension "errors".
+        debug_file: '/dev/null',
       });
       return worker;
     })().catch((e) => { workerPromise = null; throw e; });

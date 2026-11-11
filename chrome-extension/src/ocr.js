@@ -26,7 +26,8 @@
   /**
    * Upscale the tile to ~80 px tall, binarise with Otsu and make sure the
    * result is dark digits on a white page (Tesseract's favourite input),
-   * with a white margin. Returns a PNG data URL.
+   * with a white margin. Returns a PNG data URL, or null if the crop
+   * contains nothing digit-like.
    */
   function prepareTile(source, rect) {
     const scale = Math.max(1, Math.min(5, 80 / rect.h));
@@ -54,9 +55,41 @@
     // Digits are the minority of pixels; if "dark" is the majority the
     // number is light-on-dark, so invert.
     const invert = dark > n / 2;
+    const ink = new Uint8Array(n);
+    for (let i = 0; i < n; i++) ink[i] = (gray[i] <= thr) !== invert ? 1 : 0;
+
+    // Clean-up: keep only connected ink blobs that look like digit strokes.
+    // Drop blobs touching the crop edge (rounded tile corners, the backdrop,
+    // slivers of neighbouring tiles) and blobs shorter than 25% of the crop
+    // (specks). These slivers are what made Tesseract log
+    // "Image too small to scale!!".
+    const label = new Int32Array(n);
+    const stack = [];
+    let kept = 0;
+    for (let s0 = 0; s0 < n; s0++) {
+      if (!ink[s0] || label[s0]) continue;
+      const pix = [];
+      let minY = h, maxY = 0, edge = false;
+      label[s0] = 1;
+      stack.push(s0);
+      while (stack.length) {
+        const p = stack.pop();
+        pix.push(p);
+        const x = p % w, y = (p / w) | 0;
+        if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (x > 0 && ink[p - 1] && !label[p - 1]) { label[p - 1] = 1; stack.push(p - 1); }
+        if (x < w - 1 && ink[p + 1] && !label[p + 1]) { label[p + 1] = 1; stack.push(p + 1); }
+        if (y > 0 && ink[p - w] && !label[p - w]) { label[p - w] = 1; stack.push(p - w); }
+        if (y < h - 1 && ink[p + w] && !label[p + w]) { label[p + w] = 1; stack.push(p + w); }
+      }
+      if (edge || maxY - minY + 1 < h * 0.25) { for (const p of pix) ink[p] = 0; } else kept += pix.length;
+    }
+    if (kept < n * 0.01) return null; // nothing digit-like: don't bother Tesseract
+
     for (let i = 0, k = 0; i < n; i++, k += 4) {
-      let v = gray[i] <= thr ? 0 : 255;
-      if (invert) v = 255 - v;
+      const v = ink[i] ? 0 : 255;
       d[k] = d[k + 1] = d[k + 2] = v;
       d[k + 3] = 255;
     }
