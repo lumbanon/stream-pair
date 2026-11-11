@@ -2,7 +2,19 @@
 // and answers popup messages. Never types or sends anything into chat.
 (() => {
   const SP = globalThis.SP;
-  if (!SP || SP.controller) return;
+  if (!SP) return;
+
+  // When the extension is reloaded/updated, Chrome leaves the OLD copy of this
+  // script running in open tabs, disconnected from the extension, with its
+  // overlay still on the page. That stale overlay would also end up inside
+  // our tab screenshots. So: stop any previous controller we can reach, tell
+  // other copies to shut down, and remove any UI they left behind.
+  if (SP.controller) { try { SP.controller.shutdown && SP.controller.shutdown(); } catch (e) { /* dead */ } }
+  window.dispatchEvent(new CustomEvent('stream-pairs-helper:shutdown'));
+  document.querySelectorAll('#stream-pairs-helper-root').forEach((n) => n.remove());
+
+  /** False once this copy has been disconnected from the extension. */
+  const alive = () => { try { return !!(chrome.runtime && chrome.runtime.id); } catch (e) { return false; } };
 
   const host = location.hostname.replace(/^www\./, '');
   const AREA_KEY = `area:${host}`;
@@ -27,8 +39,20 @@
     lastLayoutCheck: 0,
     lastError: '',
     rafOn: false,
+    dead: false,
   };
   SP.controller = C;
+
+  function shutdown() {
+    if (C.dead) return;
+    C.dead = true;
+    C.running = false;
+    C.rafOn = false;
+    capturer.stop();
+    overlay.destroy();
+    window.removeEventListener('stream-pairs-helper:shutdown', shutdown);
+  }
+  C.shutdown = () => shutdown();
 
   const overlay = new SP.Overlay({
     onTileClick: (i) => onTileClick(i),
@@ -172,6 +196,19 @@
   // Keep the board layer glued to the video every animation frame.
   function rafLoop() {
     if (!C.rafOn) return;
+    if (!alive()) { shutdown(); return; }
+    const now = performance.now();
+    if (now - (C.lastForeignCheck || 0) > 2000) {
+      C.lastForeignCheck = now;
+      if (overlay.foreignRoots().length) {
+        // A pre-update copy that cannot be shut down from here. Its overlay
+        // would pollute our screenshots, so make the user reload the tab.
+        if (!C.staleWarned) overlay.toast('An old copy of the extension is still on this page. Press F5 to reload the tab.', 8000);
+        C.staleWarned = true;
+        C.info = 'Old extension copy detected on this page: reload the tab (F5), otherwise detection will be wrong.';
+        renderUI();
+      }
+    }
     overlay.place(SP.capture.areaViewportRect(C.area));
     requestAnimationFrame(rafLoop);
   }
@@ -231,6 +268,22 @@
     overlay.toast('Board area cleared');
   }
 
+  /** Download exactly what the analyser sees (for tuning / bug reports). */
+  async function saveCrop() {
+    const f = C.lastFrame;
+    if (!f) { overlay.toast('No frame captured yet'); return; }
+    const blob = await f.canvas.convertToBlob({ type: 'image/png' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const g = C.grid ? `${C.grid.rows}x${C.grid.cols}` : 'nogrid';
+    a.href = url;
+    a.download = `stream-pairs-crop-${f.source}-${f.width}x${f.height}-${g}.png`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
   function onAction(name) {
     if (name === 'toggleRun') C.running ? stop() : start();
     else if (name === 'newLevel') newLevel();
@@ -242,6 +295,7 @@
       renderUI();
     } else if (name === 'debug') SP.saveSettings({ debug: !C.S.debug });
     else if (name === 'hidePanel') SP.saveSettings({ showPanel: false });
+    else if (name === 'saveCrop') saveCrop();
   }
 
   async function onTileClick(i) {
@@ -322,6 +376,8 @@
 
   // Pause analysis while the tab is hidden; capture() already skips frames.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') C.lastMini = null; });
+
+  window.addEventListener('stream-pairs-helper:shutdown', shutdown);
 
   (async () => {
     C.S = await SP.loadSettings();

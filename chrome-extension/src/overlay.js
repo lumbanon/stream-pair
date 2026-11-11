@@ -128,7 +128,18 @@
       this.lastDebug = 0;
     }
 
+    /** Remove all UI for good (this script copy is shutting down). */
+    destroy() {
+      this.dead = true;
+      if (this.host) this.host.remove();
+    }
+
     ensure() {
+      if (this.dead) {
+        // Keep method calls harmless after destroy(): build detached UI once.
+        if (!this.host) { this.dead = false; this.ensure(); this.dead = true; this.host.remove(); }
+        return;
+      }
       if (this.host && this.host.isConnected) return;
       this.host = el('div', { id: 'stream-pairs-helper-root' });
       this.host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646;';
@@ -148,12 +159,18 @@
 
     /** In fullscreen only the fullscreen element's subtree is painted. */
     mount() {
+      if (this.dead) return;
       const fs = document.fullscreenElement;
       const parent = fs && fs.tagName !== 'VIDEO' ? fs : document.documentElement;
       if (this.host.parentNode !== parent) parent.append(this.host);
     }
 
     get root() { this.ensure(); return this.shadow; }
+
+    /** UI roots on the page that are not ours (left by a stale script copy). */
+    foreignRoots() {
+      return Array.from(document.querySelectorAll('#stream-pairs-helper-root')).filter((n) => n !== this.host);
+    }
 
     buildPanel() {
       this.statusEl = el('span', { class: 'st', text: 'idle' });
@@ -191,6 +208,7 @@
       this.debugInfo = el('div', { class: 'empty' });
       this.debugTable = el('table');
       const hdr = el('div', { class: 'hdr' }, [el('span', { text: 'Debug' }), el('span', { class: 'grow' }),
+        el('button', { text: 'Save crop', title: 'Download the exact board image being analysed', onclick: () => this.cb.onAction('saveCrop') }),
         el('button', { text: '×', onclick: () => this.cb.onAction('debug') })]);
       this.debug = el('div', { class: 'debug' }, [hdr, el('div', { class: 'body' }, [tune, this.debugInfo, this.debugTable])]);
       makeDraggable(this.debug, hdr);

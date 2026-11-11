@@ -15,7 +15,9 @@ that gets flipped, and lists the pairs you can type in chat, e.g. `[7,30] [2,15]
 2. Turn on **Developer mode** (top-right).
 3. Click **Load unpacked** and pick the `chrome-extension` folder (the one containing `manifest.json`).
 4. Pin "Stream Pairs Helper" from the puzzle-piece menu.
-5. Reload any stream tab that was already open.
+5. Reload any stream tab that was already open. **Do this every time you reload or
+   update the extension.** Otherwise the old copy's overlay stays on the page and ends up
+   in the screenshots.
 
 ## Use
 
