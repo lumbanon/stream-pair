@@ -221,7 +221,21 @@
 
     showArea(on) { this.ensure(); this.outlineOn = on; this.outline.classList.toggle('on', on); }
 
-    setCaptureHidden(h) { if (this.board) this.board.classList.toggle('hidden-for-capture', h); }
+    /**
+     * Hide our UI for the instant a tab screenshot is taken. The board layer
+     * always; the panels only if they overlap the board (avoids flicker).
+     */
+    setCaptureHidden(h) {
+      if (!this.board) return;
+      this.board.classList.toggle('hidden-for-capture', h);
+      const b = this.board.getBoundingClientRect();
+      for (const p of [this.panel, this.debug]) {
+        if (!h) { p.style.visibility = ''; continue; }
+        const r = p.getBoundingClientRect();
+        const overlaps = r.width && r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top;
+        if (overlaps) p.style.visibility = 'hidden';
+      }
+    }
 
     setPanelVisible(v) { this.ensure(); this.panel.style.display = v ? '' : 'none'; }
 

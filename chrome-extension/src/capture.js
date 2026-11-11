@@ -1,7 +1,9 @@
 // Frame capture: locate the stream <video>, map the saved board area onto it,
 // and produce cropped ImageData frames.
 //
-// Area format (saved per site): { anchor: 'video' | 'viewport', x, y, w, h }
+// Area format (saved per site): { anchor: 'video' | 'element' | 'viewport', x, y, w, h }
+// ('element' areas also carry { selector, loose } to find the board container
+// again on pages that draw the board as HTML, like the streampairs.com host screen.)
 // where x/y/w/h are fractions of the *rendered video picture* (the video
 // content box, letterboxing removed) or of the viewport when no video was
 // found. Because the picture box is recomputed every frame, the area keeps
@@ -43,11 +45,85 @@
     return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h };
   }
 
-  function anchorRect(anchor) {
+  // ---- element anchor (pages that render the board as HTML, e.g. the
+  // streampairs.com host screen). The area is stored relative to the board's
+  // container element, so it survives scrolling and responsive re-layout.
+
+  const OWN_ROOT = 'stream-pairs-helper-root';
+  const cssIdent = (s) => (window.CSS && CSS.escape ? CSS.escape(s) : s.replace(/[^\w-]/g, '\\$&'));
+  const goodClass = (c) => /^[A-Za-z_][\w-]*$/.test(c) && c.length < 60;
+
+  /** Structural CSS path: stops at a unique id, otherwise tag.classes:nth-of-type(n) up to <body>. */
+  function cssPath(el) {
+    const parts = [];
+    for (let e = el; e && e.nodeType === 1 && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+      if (e.id && document.querySelectorAll(`#${cssIdent(e.id)}`).length === 1) { parts.unshift(`#${cssIdent(e.id)}`); break; }
+      let p = e.tagName.toLowerCase();
+      const cls = Array.from(e.classList).filter(goodClass).slice(0, 3);
+      if (cls.length) p += cls.map((c) => `.${cssIdent(c)}`).join('');
+      const parent = e.parentElement;
+      if (parent) {
+        const same = Array.from(parent.children).filter((s) => s.tagName === e.tagName);
+        if (same.length > 1) p += `:nth-of-type(${same.indexOf(e) + 1})`;
+      }
+      parts.unshift(p);
+    }
+    return parts.join(' > ');
+  }
+
+  /** Looser selector (tag + classes of the element itself) used if the path breaks. */
+  function looseSelector(el) {
+    const cls = Array.from(el.classList).filter(goodClass).slice(0, 3);
+    return el.tagName.toLowerCase() + cls.map((c) => `.${cssIdent(c)}`).join('');
+  }
+
+  /**
+   * Smallest element (from the one under the selection centre, walking up)
+   * whose box covers >= 90% of the selection without being far bigger than it.
+   */
+  function pickContainer(vr) {
+    const cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2;
+    const start = document.elementsFromPoint(cx, cy).find((e) => !e.closest(`#${OWN_ROOT}`));
+    const selArea = vr.width * vr.height;
+    for (let e = start; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+      const r = e.getBoundingClientRect();
+      const ix = Math.max(0, Math.min(vr.left + vr.width, r.right) - Math.max(vr.left, r.left));
+      const iy = Math.max(0, Math.min(vr.top + vr.height, r.bottom) - Math.max(vr.top, r.top));
+      if (ix * iy >= 0.9 * selArea) return r.width * r.height <= 4 * selArea ? e : null;
+    }
+    return null;
+  }
+
+  let cachedEl = null, cachedSel = '';
+  function resolveElement(area) {
+    if (cachedEl && cachedSel === area.selector && cachedEl.isConnected) return cachedEl;
+    let el = null;
+    try { el = document.querySelector(area.selector); } catch (e) { el = null; }
+    if (!el && area.loose) {
+      let best = 0;
+      try {
+        for (const c of document.querySelectorAll(area.loose)) {
+          const r = c.getBoundingClientRect();
+          if (r.width * r.height > best) { best = r.width * r.height; el = c; }
+        }
+      } catch (e) { el = null; }
+    }
+    cachedEl = el; cachedSel = area.selector;
+    return el;
+  }
+
+  function anchorRect(area) {
+    const anchor = area.anchor;
     if (anchor === 'video') {
       const v = findVideo();
       if (v) return { rect: videoContentRect(v), video: v };
       return null;
+    }
+    if (anchor === 'element') {
+      const el = resolveElement(area);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return r.width && r.height ? { rect: r, video: null } : null;
     }
     return { rect: { left: 0, top: 0, width: innerWidth, height: innerHeight }, video: null };
   }
@@ -55,7 +131,7 @@
   /** Board area in viewport CSS pixels, or null if the anchor is missing. */
   function areaViewportRect(area) {
     if (!area) return null;
-    const a = anchorRect(area.anchor);
+    const a = anchorRect(area);
     if (!a) return null;
     const { rect } = a;
     return {
@@ -84,6 +160,19 @@
           h: cl((vr.top + vr.height - c.top) / c.height) - y,
         };
       }
+    }
+    const el = pickContainer(vr);
+    if (el) {
+      const r = el.getBoundingClientRect();
+      return {
+        anchor: 'element',
+        selector: cssPath(el),
+        loose: looseSelector(el),
+        x: (vr.left - r.left) / r.width,
+        y: (vr.top - r.top) / r.height,
+        w: vr.width / r.width,
+        h: vr.height / r.height,
+      };
     }
     return { anchor: 'viewport', x: vr.left / innerWidth, y: vr.top / innerHeight, w: vr.width / innerWidth, h: vr.height / innerHeight };
   }

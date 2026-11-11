@@ -2,7 +2,7 @@
 // Talks to the content script of the active tab; never touches chat.
 const SP = globalThis.SP;
 const $ = (id) => document.getElementById(id);
-const SUPPORTED = /^https:\/\/([^/]+\.)?(twitch\.tv|youtube\.com|kick\.com)\//;
+const SUPPORTED = /^https:\/\/([^/]+\.)?(twitch\.tv|youtube\.com|kick\.com|streampairs\.com)\//;
 
 let tab = null;
 let settings = null;
@@ -85,7 +85,7 @@ async function refresh() {
   } catch (e) { /* ignore */ }
   const st = await sendToTab({ type: 'getStatus' });
   if (!st) {
-    setStatus(SUPPORTED.test((tab && tab.url) || '') ? 'Page not ready. Reload the stream tab.' : 'Open a Twitch, YouTube or Kick stream tab.', true);
+    setStatus(SUPPORTED.test((tab && tab.url) || '') ? 'Page not ready. Reload the stream tab.' : 'Open a Twitch, YouTube or Kick stream, or the streampairs.com host screen.', true);
     renderPairs(null);
     return;
   }
@@ -147,7 +147,7 @@ async function main() {
   $('edit').addEventListener('click', async () => { await sendToTab({ type: 'action', name: 'edit' }); window.close(); });
   $('gallery').addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); });
 
-  if (!ready) setStatus(SUPPORTED.test((tab && tab.url) || '') ? 'Reload the stream tab to enable the helper.' : 'Open a Twitch, YouTube or Kick stream tab.', true);
+  if (!ready) setStatus(SUPPORTED.test((tab && tab.url) || '') ? 'Reload the stream tab to enable the helper.' : 'Open a Twitch, YouTube or Kick stream, or the streampairs.com host screen.', true);
   await refresh();
   setInterval(refresh, 1000);
 }

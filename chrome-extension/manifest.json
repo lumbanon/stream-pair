@@ -8,7 +8,9 @@
     "https://*.twitch.tv/*",
     "https://*.youtube.com/*",
     "https://kick.com/*",
-    "https://*.kick.com/*"
+    "https://*.kick.com/*",
+    "https://streampairs.com/*",
+    "https://*.streampairs.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -34,7 +36,9 @@
         "https://*.twitch.tv/*",
         "https://*.youtube.com/*",
         "https://kick.com/*",
-        "https://*.kick.com/*"
+        "https://*.kick.com/*",
+        "https://streampairs.com/*",
+        "https://*.streampairs.com/*"
       ],
       "js": [
         "src/settings.js",

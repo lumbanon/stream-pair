@@ -36,6 +36,28 @@ Popup buttons: **Show Area** flashes the saved border. **Reset Area** clears it 
 site. **Start/Stop** scanning. **Teach mode**: click two tiles to save them as a pair.
 **Edit numbers**: click a tile to fix its number. **Debug** opens the debug panel.
 
+## Testing on your own host screen (streampairs.com/en/system)
+
+The extension also runs on `https://streampairs.com/*`, so you can host a game and check
+that it works without a stream:
+
+1. Open `https://streampairs.com/en/system` and start a game, so the board is on screen.
+2. Click the extension icon. This also gives the tab the `activeTab` grant the screenshot
+   capture needs. Then click **Select Board Area** and drag around the cards.
+3. Flip cards from your own chat (or the game's test input) and watch the overlay and
+   panel fill in.
+
+How it differs from a stream:
+- The host page draws the board as HTML (cards with a CSS flip), not as a video, so
+  frames come from `captureVisibleTab` at about **2 fps**. That is enough for flips that
+  stay visible for a second or more.
+- The area is stored relative to the **board's container element** (found under your
+  selection), not the window. Scrolling and resizing keep it lined up.
+- If you reload the tab, click the extension icon once more before scanning. The
+  `activeTab` grant does not survive a reload.
+- Keep the floating panel off the board. It is hidden for the instant of each
+  screenshot, which can flicker if it overlaps.
+
 ## How it works
 
 | Module | Job |

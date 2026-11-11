@@ -208,7 +208,7 @@
     if (!r) { overlay.toast('Selection cancelled'); return; }
     C.area = SP.capture.rectToArea(r);
     await chrome.storage.local.set({ [AREA_KEY]: C.area });
-    overlay.toast(`Board area saved for ${host} (${C.area.anchor === 'video' ? 'relative to video' : 'relative to window'})`);
+    overlay.toast(`Board area saved for ${host} (${{ video: 'relative to video', element: 'relative to the board element' }[C.area.anchor] || 'relative to window'})`);
     showArea(2500);
     C.grid = null;
     start();
