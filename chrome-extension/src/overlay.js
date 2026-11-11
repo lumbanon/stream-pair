@@ -24,7 +24,7 @@
     background: rgba(0,0,0,.65); padding: 2px 4px; border-radius: 3px; }
   .tile.pair .num { color: #000; }
   .tile .num.guess { font-style: italic; }
-  .tile img.th { position: absolute; right: 2px; top: 2px; width: 38%; max-width: 56px; border-radius: 3px;
+  .tile img.th { position: absolute; right: 2px; top: 2px; width: 38%; max-width: 56px; aspect-ratio: 1; object-fit: cover; border-radius: 3px;
     border: 1px solid rgba(0,0,0,.6); background: #000; }
   .area-outline { position: fixed; border: 2px dashed #00e5ff; box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
     pointer-events: none; display: none; }

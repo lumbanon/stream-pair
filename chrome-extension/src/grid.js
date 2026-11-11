@@ -131,16 +131,73 @@
   }
 
   /**
+   * The two dominant colours of the crop (2-means on ~4000 sampled pixels,
+   * seeded with the darkest and brightest sample). On a Stream Pairs board
+   * these are typically "backdrop" and "tile face".
+   */
+  function dominantColors(img) {
+    const { data, width: W, height: H } = img;
+    const step = Math.max(1, Math.floor(Math.sqrt((W * H) / 4000)));
+    const px = [];
+    for (let y = 0; y < H; y += step) for (let x = 0; x < W; x += step) {
+      const k = (y * W + x) * 4;
+      px.push([data[k], data[k + 1], data[k + 2]]);
+    }
+    const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+    let a = px[0], b = px[0];
+    for (const c of px) { if (lum(c) < lum(a)) a = c; if (lum(c) > lum(b)) b = c; }
+    let ca = a.slice(), cb = b.slice();
+    for (let it = 0; it < 8; it++) {
+      const sa = [0, 0, 0, 0], sb = [0, 0, 0, 0];
+      for (const c of px) {
+        const t = SP.hash.colorDist(c, ca) <= SP.hash.colorDist(c, cb) ? sa : sb;
+        t[0] += c[0]; t[1] += c[1]; t[2] += c[2]; t[3]++;
+      }
+      if (sa[3]) ca = [sa[0] / sa[3], sa[1] / sa[3], sa[2] / sa[3]];
+      if (sb[3]) cb = [sb[0] / sb[3], sb[1] / sb[3], sb[2] / sb[3]];
+    }
+    return [ca, cb];
+  }
+
+  /**
+   * Plausibility score of a candidate grid. Real boards have:
+   *  - tiles covering most of each axis (gutters are thin),
+   *  - evenly sized tiles (low coefficient of variation),
+   *  - roughly square tiles.
+   * The classic failure (backdrop colour mistaken for tile colour) turns the
+   * thin gutters into "tiles": coverage collapses and the score with it.
+   */
+  function scoreGrid(colSegs, rowSegs, W, H, periodic) {
+    const axis = (segs) => {
+      const w = segs.map((s) => s[1] - s[0]);
+      const { mean, std } = SP.hash.meanStd(w);
+      const cov = w.reduce((x, v) => x + v, 0);
+      return { cov, cv: mean ? std / mean : 1, med: percentile(w, 0.5) };
+    };
+    const ax = axis(colSegs), ay = axis(rowSegs);
+    const aspect = (ax.med * W) / (ay.med * H || 1);
+    let score = Math.min(ax.cov, 0.97) + Math.min(ay.cov, 0.97) - ax.cv - ay.cv - 1.5 * Math.abs(Math.log(aspect || 1e-3));
+    if (ax.cov < 0.45) score -= 2;
+    if (ay.cov < 0.45) score -= 2;
+    return score - 0.6 * periodic;
+  }
+
+  /**
    * Auto-detect the tile grid from an ImageData of the board crop.
    *
-   * 1. Estimate the backdrop colour from the crop border.
-   * 2. Foreground mask: pixel colour differs from the backdrop by > 60
-   *    (sum of |dR|+|dG|+|dB|).
-   * 3. Column projection = fraction of foreground pixels in each column, row
-   *    projection likewise. Tile columns/rows show up as plateaus.
-   * 4. Segment each projection (segmentsFromProjection). If that fails for an
+   * 1. Background candidates: the colour of a ring just inside the crop edge,
+   *    plus the two dominant colours of the crop. The ring alone is NOT
+   *    enough: when the border is drawn tightly around the tiles, the ring
+   *    lies on the tiles and "background" would be the tile colour, which
+   *    inverts everything (gutters detected as tiles).
+   * 2. For each candidate: foreground mask = pixel differs from it by > 60
+   *    (sum of |dR|+|dG|+|dB|); column projection = fraction of foreground
+   *    pixels per column, row projection likewise. Tile columns/rows show up
+   *    as plateaus separated by gutter dips.
+   * 3. Segment each projection (segmentsFromProjection). If that fails for an
    *    axis, fall back to edge periodicity (countFromPeriodicity) and split
    *    that axis evenly.
+   * 4. Keep the candidate with the best scoreGrid().
    *
    * Works at a reduced resolution (~320 px wide) because only coarse
    * structure matters.
@@ -148,44 +205,56 @@
   function detect(img) {
     const { data, width: W, height: H } = img;
     if (W < 20 || H < 20) return null;
-    const bg = estimateBackground(img);
     const s = Math.max(1, Math.floor(W / 320));
     const nx = Math.floor(W / s), ny = Math.floor(H / s);
-    const col = new Float32Array(nx), row = new Float32Array(ny);
-    const colEdge = new Float32Array(nx), rowEdge = new Float32Array(ny);
-    const lum = new Float32Array(nx * ny);
-    for (let yi = 0; yi < ny; yi++) {
-      const y = yi * s;
-      for (let xi = 0; xi < nx; xi++) {
-        const k = (y * W + xi * s) * 4;
-        const r = data[k], g = data[k + 1], b = data[k + 2];
-        lum[yi * nx + xi] = 0.299 * r + 0.587 * g + 0.114 * b;
-        if (Math.abs(r - bg[0]) + Math.abs(g - bg[1]) + Math.abs(b - bg[2]) > 60) { col[xi]++; row[yi]++; }
-      }
-    }
-    for (let i = 0; i < nx; i++) col[i] /= ny;
-    for (let i = 0; i < ny; i++) row[i] /= nx;
-    for (let yi = 1; yi < ny; yi++) {
-      for (let xi = 1; xi < nx; xi++) {
-        const v = lum[yi * nx + xi];
-        colEdge[xi] += Math.abs(v - lum[yi * nx + xi - 1]);
-        rowEdge[yi] += Math.abs(v - lum[(yi - 1) * nx + xi]);
-      }
-    }
 
-    let colSegs = segmentsFromProjection(col);
-    let rowSegs = segmentsFromProjection(row);
-    let source = 'auto-projection';
-    if (!colSegs) {
-      const n = countFromPeriodicity(colEdge);
-      if (n) { colSegs = Array.from({ length: n }, (_, c) => [c / n, (c + 1) / n]); source = 'auto-periodic'; }
+    // Edge-energy projections (independent of the background guess).
+    const lum = new Float32Array(nx * ny);
+    for (let yi = 0; yi < ny; yi++) for (let xi = 0; xi < nx; xi++) {
+      const k = (yi * s * W + xi * s) * 4;
+      lum[yi * nx + xi] = 0.299 * data[k] + 0.587 * data[k + 1] + 0.114 * data[k + 2];
     }
-    if (!rowSegs) {
-      const n = countFromPeriodicity(rowEdge);
-      if (n) { rowSegs = Array.from({ length: n }, (_, r) => [r / n, (r + 1) / n]); source = 'auto-periodic'; }
+    const colEdge = new Float32Array(nx), rowEdge = new Float32Array(ny);
+    for (let yi = 1; yi < ny; yi++) for (let xi = 1; xi < nx; xi++) {
+      const v = lum[yi * nx + xi];
+      colEdge[xi] += Math.abs(v - lum[yi * nx + xi - 1]);
+      rowEdge[yi] += Math.abs(v - lum[(yi - 1) * nx + xi]);
     }
-    if (!colSegs || !rowSegs) return null;
-    return { rows: rowSegs.length, cols: colSegs.length, source, cells: makeCells(colSegs, rowSegs), bg };
+    const periodicSegs = (edge) => {
+      const n = countFromPeriodicity(edge);
+      return n ? Array.from({ length: n }, (_, i) => [i / n, (i + 1) / n]) : null;
+    };
+
+    const candidates = [estimateBackground(img), ...dominantColors(img)]
+      .filter((c, i, arr) => arr.findIndex((o) => SP.hash.colorDist(o, c) < 30) === i);
+
+    let best = null;
+    for (const bg of candidates) {
+      const col = new Float32Array(nx), row = new Float32Array(ny);
+      for (let yi = 0; yi < ny; yi++) {
+        for (let xi = 0; xi < nx; xi++) {
+          const k = (yi * s * W + xi * s) * 4;
+          if (Math.abs(data[k] - bg[0]) + Math.abs(data[k + 1] - bg[1]) + Math.abs(data[k + 2] - bg[2]) > 60) { col[xi]++; row[yi]++; }
+        }
+      }
+      for (let i = 0; i < nx; i++) col[i] /= ny;
+      for (let i = 0; i < ny; i++) row[i] /= nx;
+      let colSegs = segmentsFromProjection(col);
+      let rowSegs = segmentsFromProjection(row);
+      let periodic = 0;
+      if (!colSegs) { colSegs = periodicSegs(colEdge); periodic++; }
+      if (!rowSegs) { rowSegs = periodicSegs(rowEdge); periodic++; }
+      if (!colSegs || !rowSegs) continue;
+      const score = scoreGrid(colSegs, rowSegs, W, H, periodic);
+      if (!best || score > best.score) {
+        best = { score, colSegs, rowSegs, bg: bg.map((v) => Math.round(v)), source: periodic ? 'auto-periodic' : 'auto-projection' };
+      }
+    }
+    if (!best) return null;
+    return {
+      rows: best.rowSegs.length, cols: best.colSegs.length, source: best.source,
+      cells: makeCells(best.colSegs, best.rowSegs), bg: best.bg, score: Math.round(best.score * 100) / 100,
+    };
   }
 
   /** Cell fraction rect -> pixel rect inside a W x H crop, shrunk by `inset`. */

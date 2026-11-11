@@ -75,7 +75,10 @@
      * already solved, silently, so they never create bogus pair events.
      */
     calibrate(frame, S) {
-      this.bg = SP.grid.estimateBackground(frame.imageData);
+      // Backdrop colour for "tile removed" detection. Prefer the one chosen by
+      // grid detection (robust to tight borders), else ask the detector.
+      const det = this.grid.bg ? null : SP.grid.detect(frame.imageData);
+      this.bg = this.grid.bg || (det && det.bg) || SP.grid.estimateBackground(frame.imageData);
       const sigs = this.tiles.map((t) => H().signature(frame.imageData, this.rectPx(t, frame, S.insetFrac)));
       this.globalBack = medianHist(sigs.map((s) => s.hist));
       this.tiles.forEach((t, k) => {
