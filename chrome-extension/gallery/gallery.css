@@ -1,0 +1,22 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 1100px; padding: 16px; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: #15151c; color: #e6e6ea; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 15px; margin: 22px 0 8px; }
+.muted { color: #8d8da0; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+button, .btn, select { font: inherit; color: #e6e6ea; background: #262633; border: 1px solid #44445a; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button:hover, .btn:hover { background: #33334a; }
+.danger { border-color: #a8071a; }
+.danger:hover { background: #5c0011; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.card { background: #1e1e28; border: 1px solid #2f2f3e; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.card .imgs { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.card img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; background: #000; }
+.card .noimg { width: 64px; height: 64px; border-radius: 6px; background: #000; display: flex; align-items: center; justify-content: center; color: #555; }
+.card .meta { font-size: 11px; color: #8d8da0; display: flex; justify-content: space-between; gap: 6px; }
+.card .hash { font: 10px ui-monospace, Consolas, monospace; color: #6f6f82; word-break: break-all; }
+.card button { align-self: flex-end; padding: 3px 8px; font-size: 12px; }
+.filter { margin-bottom: 8px; }
+details summary { cursor: pointer; color: #69b1ff; margin-bottom: 8px; }

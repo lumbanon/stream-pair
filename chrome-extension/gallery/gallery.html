@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Stream Pairs: Pair Database</title>
+  <link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+  <header>
+    <h1>Pair database</h1>
+    <div class="actions">
+      <button id="export">Export JSON</button>
+      <label class="btn">Import JSON<input type="file" id="import" accept="application/json,.json" hidden></label>
+      <button id="clearNon">Clear non-pairs</button>
+      <button id="clearAll" class="danger">Delete everything</button>
+    </div>
+  </header>
+  <p class="muted">
+    Pairs are learned automatically whenever both tiles of a guess end up matched, or saved by you in Teach mode.
+    Delete anything wrong: a bad entry can make the helper suggest wrong pairs. Everything is stored locally in this browser.
+  </p>
+  <div id="msg" class="muted"></div>
+
+  <h2>Learned pairs <span id="pairCount" class="muted"></span></h2>
+  <div class="filter">
+    <label>Sort
+      <select id="sort">
+        <option value="updated">Recently seen</option>
+        <option value="times">Times seen</option>
+        <option value="created">Created</option>
+      </select>
+    </label>
+  </div>
+  <div id="pairs" class="grid"></div>
+
+  <h2>Known non-pairs <span id="nonCount" class="muted"></span></h2>
+  <details>
+    <summary>Show</summary>
+    <div id="nonpairs" class="grid"></div>
+  </details>
+
+  <script src="../src/settings.js"></script>
+  <script src="../src/hash.js"></script>
+  <script src="../src/learner.js"></script>
+  <script src="gallery.js"></script>
+</body>
+</html>

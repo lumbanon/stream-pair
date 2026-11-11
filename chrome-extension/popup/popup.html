@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Stream Pairs Helper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <strong>Stream Pairs Helper</strong>
+    <span id="learned" class="muted">0 pairs learned</span>
+  </header>
+
+  <div id="status" class="status muted">…</div>
+
+  <section>
+    <h2>Board area</h2>
+    <div class="row">
+      <button id="select" class="primary">Select Board Area</button>
+      <button id="show">Show Area</button>
+      <button id="reset">Reset Area</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Scan</h2>
+    <div class="row">
+      <button id="start">Start</button>
+      <button id="stop">Stop</button>
+      <button id="newLevel">New Level</button>
+    </div>
+    <div class="row">
+      <button id="teach">Teach mode</button>
+      <button id="edit">Edit numbers</button>
+      <label class="chk"><input type="checkbox" id="showPanel"> Floating panel</label>
+      <label class="chk"><input type="checkbox" id="debug"> Debug</label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Grid</h2>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="autoGrid"> Auto-detect</label>
+      <label>Rows <input type="number" id="rows" min="1" max="15"></label>
+      <label>Cols <input type="number" id="cols" min="1" max="15"></label>
+      <button id="regrid" title="Rebuild grid on the next frame">Re-detect</button>
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="ocrEnabled"> Read tile numbers (OCR)</label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Matching</h2>
+    <div class="row">
+      <label>Mode
+        <select id="mode">
+          <option value="auto">Auto (try both)</option>
+          <option value="identical">Identical</option>
+          <option value="complement">Complement</option>
+        </select>
+      </label>
+      <label>Hash
+        <select id="hashType">
+          <option value="dhash">dHash</option>
+          <option value="phash">pHash</option>
+        </select>
+      </label>
+    </div>
+    <div class="row slider">
+      <label for="hashThreshold">Hash distance ≤ <b id="hashThresholdV"></b></label>
+      <input type="range" id="hashThreshold" min="0" max="20" step="1">
+    </div>
+    <div class="row slider">
+      <label for="histMin">Colour similarity ≥ <b id="histMinV"></b></label>
+      <input type="range" id="histMin" min="0.3" max="1" step="0.05">
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="recordNonPairs"> Record wrong guesses as non-pairs</label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ready to type</h2>
+    <div id="pairs"></div>
+    <h3>Half-known</h3>
+    <div id="half"></div>
+  </section>
+
+  <footer>
+    <a href="#" id="gallery">Pair database (gallery, export/import)</a>
+  </footer>
+
+  <script src="../src/settings.js"></script>
+  <script src="../src/hash.js"></script>
+  <script src="../src/learner.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
