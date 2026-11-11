@@ -53,7 +53,7 @@
         stable: 0, prevSig: null, lastSig: null,
         backRef: null, lastBack: true,
         fp: null, thumb: null,
-        flipStart: 0, revealedAt: 0, matchedAt: 0, matchedBy: null,
+        flipStart: 0, revealedAt: 0, matchedAt: 0, matchedBy: null, silent: false, emptySince: 0,
         debug: { backDiff: 0, backHist: 0, prevDiff: 0 },
       }));
       if (frame) this.calibrate(frame, S);
@@ -71,8 +71,12 @@
      * right now, we compare each tile's colour histogram with the median
      * histogram of all tiles: at level start most tiles are backs, so the
      * median is a clean model of a back even if a few tiles are open.
-     * Tiles that do not look like a back (joining mid-level) are recorded as
-     * already solved, silently, so they never create bogus pair events.
+     * Tiles that do not look like a back are NOT assumed solved: the level is
+     * often calibrated while a guess is on screen (or mid-flip). They start in
+     * 'flipping' with `silent` set, so their picture is still remembered once
+     * it settles, but they never produce pair events (we did not see the
+     * guess start). If they stay up they become matched; if they flip back
+     * they simply become hidden-and-remembered.
      */
     calibrate(frame, S) {
       // Backdrop colour for "tile removed" detection. Prefer the one chosen by
@@ -87,12 +91,10 @@
         if (H().histSim(sig.hist, this.globalBack) >= S.backHistMin) {
           t.backRef = sig;
           t.state = 'hidden';
-        } else if (this.isEmpty(sig, S)) {
-          t.state = 'gone';
         } else {
-          t.state = 'matched';
-          t.matchedBy = 'calibration';
-          this.captureFingerprint(t, frame, S);
+          t.state = 'flipping';
+          t.flipStart = Date.now();
+          t.silent = true;
         }
       });
     }
@@ -148,7 +150,11 @@
      *     flipping. We do NOT fingerprint immediately: the flip animation
      *     shows squashed/blurred intermediate pictures. Only after
      *     `stableFrames` still frames (2-3 frames ~ 0.5-1 s) is the picture
-     *     considered settled and fingerprinted.
+     *     considered settled and fingerprinted. Tab screenshots arrive only
+     *     every ~0.5 s, so there ONE still frame (two identical consecutive
+     *     captures) is enough; waiting longer would miss short reveals.
+     *     "Empty backdrop" must persist for 1.5 s before a tile counts as
+     *     removed, because a card seen edge-on mid-flip also looks empty.
      *  4. A revealed tile that settles back into its face-down look was a
      *     wrong guess (hide). One that turns into empty backdrop, or stays up
      *     longer than matchPersistMs, was a correct pair (matched).
@@ -169,10 +175,14 @@
         tile.lastSig = sig;
         tile.stable = prevDiff < S.stableDiff ? tile.stable + 1 : 0;
         tile.debug.prevDiff = prevDiff;
-        const settled = tile.stable >= S.stableFrames;
+        const need = frame && frame.source === 'tab' ? Math.min(S.stableFrames, 1) : S.stableFrames;
+        const settled = tile.stable >= need;
         const back = this.isBack(tile, sig, S);
         tile.lastBack = back;
         if (back) backCount++;
+        if (!back && this.isEmpty(sig, S)) tile.emptySince = tile.emptySince || t;
+        else tile.emptySince = 0;
+        const removed = !!tile.emptySince && t - tile.emptySince >= 1500;
 
         switch (tile.state) {
           case 'hidden':
@@ -190,16 +200,22 @@
             if (settled || forced) {
               if (back) {
                 tile.state = 'hidden';
-              } else if (this.isEmpty(sig, S)) {
-                tile.state = 'gone';
-                tile.matchedAt = t;
-                tile.matchedBy = 'removed';
-                events.push({ type: 'matched', tile: tile.i, t });
+                tile.silent = false;
+              } else if (tile.emptySince) {
+                // Edge-on mid-flip or removed: wait until it is clearly one or the other.
+                if (removed) {
+                  tile.state = 'gone';
+                  tile.matchedAt = t;
+                  tile.matchedBy = 'removed';
+                  if (!tile.silent) events.push({ type: 'matched', tile: tile.i, t });
+                  tile.silent = false;
+                }
               } else {
                 tile.state = 'revealed';
                 tile.revealedAt = t;
                 this.captureFingerprint(tile, frame, S);
-                events.push({ type: 'reveal', tile: tile.i, t });
+                if (!tile.silent) events.push({ type: 'reveal', tile: tile.i, t });
+                tile.silent = false;
               }
             }
             break;
@@ -210,7 +226,7 @@
             if (back) {
               tile.state = 'hidden';
               events.push({ type: 'hide', tile: tile.i, t });
-            } else if (this.isEmpty(sig, S)) {
+            } else if (removed) {
               tile.state = 'gone';
               tile.matchedAt = t;
               tile.matchedBy = 'removed';
@@ -226,7 +242,7 @@
           case 'matched':
             solved++;
             if (!settled) break;
-            if (this.isEmpty(sig, S)) {
+            if (removed) {
               tile.state = 'gone';
             } else if (back) {
               if (tile.matchedBy === 'persist' && t - tile.matchedAt < 20000) {
