@@ -21,8 +21,10 @@ that gets flipped, and lists the pairs you can type in chat, e.g. `[7,30] [2,15]
 
 1. Open the stream and wait for the Stream Pairs board, ideally with all tiles face-down.
 2. Click the extension icon, then **Select Board Area**. The popup closes. Drag a rectangle
-   tightly around the tile grid (dashed border, live size; Esc cancels).
-   Scanning starts on its own, and the area is saved for that site.
+   around the tile grid (dashed border, live size; Esc cancels). Tight or with a little
+   margin both work. Scanning starts on its own, and the area is saved for that site.
+   Check that the panel header shows the right rows×cols (e.g. `6×9`). If it doesn't,
+   untick **Auto-detect**, enter rows and cols in the popup, and press **Re-detect**.
 3. The floating panel shows:
    - **Ready pairs (known):** both tiles seen. **Copy** puts `7 30` on the clipboard.
    - **Half-known:** one tile seen, partner not yet. In complement levels the expected
