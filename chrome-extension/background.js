@@ -74,19 +74,28 @@ async function dedupeSettings() {
 
 function bump() { return chrome.storage.local.set({ dbVersion: Date.now() }); }
 
+// Writes run one at a time: add() reads all entries to de-duplicate, so two
+// overlapping adds of the same pair would otherwise both insert it.
+let writeQueue = Promise.resolve();
+function serial(fn) {
+  const run = writeQueue.then(fn, fn);
+  writeQueue = run.catch(() => {});
+  return run;
+}
+
 async function handle(msg, sender) {
   switch (msg.type) {
     case 'captureCrop': return captureCrop(msg, sender);
     case 'ocr': return ocr(msg.images);
     case 'db:all': return { pairs: await db.all('pairs'), nonPairs: await db.all('nonpairs') };
     case 'db:count': return { pairs: await db.count('pairs'), nonPairs: await db.count('nonpairs') };
-    case 'db:add': {
+    case 'db:add': return serial(async () => {
       const r = await db.add(msg.store === 'nonpairs' ? 'nonpairs' : 'pairs', msg.entry, await dedupeSettings());
       await bump();
       return r;
-    }
-    case 'db:unlearn': await db.unlearn(msg.store || 'pairs', msg.id); await bump(); return { ok: true };
-    case 'db:remove': await db.remove(msg.store || 'pairs', msg.id); await bump(); return { ok: true };
+    });
+    case 'db:unlearn': return serial(async () => { await db.unlearn(msg.store || 'pairs', msg.id); await bump(); return { ok: true }; });
+    case 'db:remove': return serial(async () => { await db.remove(msg.store || 'pairs', msg.id); await bump(); return { ok: true }; });
     default: return undefined;
   }
 }

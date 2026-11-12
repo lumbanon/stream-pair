@@ -103,6 +103,23 @@ analysed frame by more than `frameDiff`.
   has X≈A and Y≈B (or the reverse).
 - **Auto** tries both, preferring identical matches.
 
+Only complement pairs go into the database. Identical levels need no learning, so the
+gallery stays empty while you play them. To keep the database clean:
+- Nothing is learned in a level once one identical pair has been confirmed, and anything
+  learned earlier in that level is undone.
+- A guess that overlaps other guesses in time is skipped, because it is unclear which two
+  cards belonged together.
+- Non-pairs are recorded only in levels already known to be complement levels.
+
+### Level changes
+A guess flips two cards. When many cards change at once (the level-complete screen, the
+next board), analysis pauses until the screen settles. Then one of two things happens:
+- **Same board:** analysis resumes.
+- **Something else:** memory is cleared, and the next level starts when a board of
+  face-down cards appears. Menu and transition screens are never remembered as cards.
+
+To start on whatever is on screen, press **New level**.
+
 The pair database lives in the extension's IndexedDB, so it is shared across streams,
 sites and levels, and grows as you watch. The popup shows "N pairs learned". Open the
 gallery (popup footer, or the extension's Options) to review, delete, export or import it.

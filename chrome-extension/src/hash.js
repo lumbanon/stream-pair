@@ -20,10 +20,13 @@
    */
   function sampleRGB(img, rect, outW, outH) {
     const { data, width, height } = img;
+    // Intersect with the image (a cell can poke past the crop edge when the
+    // border is drawn tightly). Clamping only the origin would SHIFT the
+    // sampled region instead of trimming it.
     const rx = clamp(rect.x, 0, width - 1);
     const ry = clamp(rect.y, 0, height - 1);
-    const rw = Math.max(1, Math.min(rect.w, width - rx));
-    const rh = Math.max(1, Math.min(rect.h, height - ry));
+    const rw = Math.max(1, Math.min(rect.x + rect.w, width) - rx);
+    const rh = Math.max(1, Math.min(rect.y + rect.h, height) - ry);
     const out = new Float32Array(outW * outH * 3);
     const cw = rw / outW;
     const ch = rh / outH;
@@ -83,6 +86,20 @@
     const g = sampleGray(img, rect, 9, 8);
     const bits = new Uint8Array(64);
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) bits[y * 8 + x] = g[y * 9 + x + 1] - g[y * 9 + x] > DHASH_EPS ? 1 : 0;
+    return bitsToHex(bits);
+  }
+
+  /**
+   * Vertical dHash: same idea down the columns (8x9 grey, top vs bottom).
+   * Plain dHash only sees left/right gradients, so pictures made of
+   * horizontal bands (many flags: Belarus, Russia, Netherlands...) all hash
+   * to 0000000000000000 and become indistinguishable. Comparing both
+   * directions fixes that.
+   */
+  function dHashV(img, rect) {
+    const g = sampleGray(img, rect, 8, 9);
+    const bits = new Uint8Array(64);
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) bits[y * 8 + x] = g[(y + 1) * 8 + x] - g[y * 8 + x] > DHASH_EPS ? 1 : 0;
     return bitsToHex(bits);
   }
 
@@ -195,6 +212,7 @@
   function fingerprint(img, rect) {
     return {
       dhash: dHash(img, rect),
+      dhashv: dHashV(img, rect),
       phash: pHash(img, rect),
       hist: round4(histogram(sampleRGB(img, rect, 24, 24))),
     };
@@ -219,7 +237,10 @@
    */
   function compare(a, b, S) {
     const type = S.hashType || 'dhash';
-    const d = hamming(a && a[type], b && b[type]);
+    let d = hamming(a && a[type], b && b[type]);
+    // dHash: average the horizontal and vertical distances when both exist
+    // (entries saved by older versions only have the horizontal one).
+    if (type === 'dhash' && a && b && a.dhashv && b.dhashv) d = Math.round((d + hamming(a.dhashv, b.dhashv)) / 2);
     const h = histSim(a && a.hist, b && b.hist);
     return { d, h, near: d <= S.hashThreshold && h >= S.histMin };
   }
@@ -230,7 +251,7 @@
   }
 
   SP.hash = {
-    sampleRGB, sampleGray, toGray, dHash, pHash, hamming, histogram, histSim,
+    sampleRGB, sampleGray, toGray, dHash, dHashV, pHash, hamming, histogram, histSim,
     mad, meanStd, signature, fingerprint, thumbnail, compare, colorDist,
   };
 })();

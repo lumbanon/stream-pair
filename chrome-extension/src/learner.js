@@ -23,7 +23,7 @@
   }
 
   function side(fp, thumb) {
-    return { dhash: fp.dhash, phash: fp.phash, hist: Array.from(fp.hist), thumb: thumb || null };
+    return { dhash: fp.dhash, dhashv: fp.dhashv || null, phash: fp.phash, hist: Array.from(fp.hist), thumb: thumb || null };
   }
 
   /** Does entry e describe the same pair as (a, b), in either order? */
@@ -120,10 +120,20 @@
    * (almost) the same moment. So a reveal is linked to the closest other
    * unlinked reveal within pairWindowMs. When both tiles of a guess have an
    * outcome:
-   *   both matched     -> they are a pair. If their pictures differ (not an
-   *                       identical pair) it is a complement relationship:
-   *                       store it in the pair DB.
+   *   both matched      -> they are a pair. If their pictures differ (not an
+   *                        identical pair) it is a complement relationship:
+   *                        store it in the pair DB.
    *   both flipped back -> optionally store as a known NON-pair.
+   *
+   * Safety rules (wrong entries make the helper suggest wrong pairs):
+   *  - Ambiguous guesses are never learned: if more than two reveals overlap
+   *    in time (several viewers guessing at once) we cannot tell which two
+   *    tiles belonged together.
+   *  - A level is either "identical" or "complement". As soon as one
+   *    identical pair is confirmed in a level, nothing more is learned in
+   *    that level and any complement pair learned earlier in it is undone.
+   *  - Non-pairs are only recorded once the level is known to be a
+   *    complement level (in identical levels they carry no information).
    */
   class Learner {
     constructor() {
@@ -131,7 +141,7 @@
       this.learnedByTile = new Map();
       this.pairs = [];
       this.nonPairs = [];
-      this.stats = { identical: 0, complement: 0 };
+      this.stats = { identical: 0, complement: 0, skipped: 0 };
     }
 
     async refresh() {
@@ -144,18 +154,22 @@
     resetLevel() {
       this.open = [];
       this.learnedByTile.clear();
-      this.stats = { identical: 0, complement: 0 };
+      this.stats = { identical: 0, complement: 0, skipped: 0 };
     }
 
     onEvents(events, memory, S) {
       for (const e of events) {
         if (e.type === 'reveal') {
-          const rec = { tile: e.tile, t: e.t, result: null, partner: null };
+          const rec = { tile: e.tile, t: e.t, result: null, partner: null, ambiguous: false };
+          const overlap = this.open.filter((o) => !o.result && o.tile !== e.tile && Math.abs(o.t - e.t) <= S.pairWindowMs);
           let best = null;
-          for (const o of this.open) {
-            if (o.partner || o.tile === e.tile) continue;
-            const dt = Math.abs(o.t - e.t);
-            if (dt <= S.pairWindowMs && (!best || dt < Math.abs(best.t - e.t))) best = o;
+          for (const o of overlap) {
+            if (o.partner) continue;
+            if (!best || Math.abs(o.t - e.t) < Math.abs(best.t - e.t)) best = o;
+          }
+          if (overlap.length >= 2) {
+            rec.ambiguous = true;
+            for (const o of overlap) { o.ambiguous = true; if (o.partner) o.partner.ambiguous = true; }
           }
           if (best) { best.partner = rec; rec.partner = best; }
           this.open.push(rec);
@@ -176,16 +190,32 @@
       this.open = this.open.filter((o) => now - o.t < 60000 && !(o.result && (!o.partner || o.partner.result)));
     }
 
+    /** Undo every complement pair learned in this level (it was an identical level). */
+    retractLevel() {
+      const ids = new Set(this.learnedByTile.values());
+      this.learnedByTile.clear();
+      for (const id of ids) chrome.runtime.sendMessage({ type: 'db:unlearn', store: 'pairs', id }).catch(() => {});
+      if (ids.size) setTimeout(() => this.refresh(), 300);
+    }
+
     resolve(a, b, memory, S) {
       const tA = memory.tiles[a.tile], tB = memory.tiles[b.tile];
       if (!tA || !tB || !tA.fp || !tB.fp) return;
       const identical = SP.hash.compare(tA.fp, tB.fp, S).near;
+      const ambiguous = a.ambiguous || b.ambiguous;
       if (a.result === 'matched' && b.result === 'matched') {
-        if (identical) { this.stats.identical++; return; }
+        if (identical) {
+          this.stats.identical++;
+          if (this.stats.identical === 1) this.retractLevel();
+          return;
+        }
+        if (this.stats.identical > 0 || ambiguous) { this.stats.skipped++; return; }
         this.stats.complement++;
         this.save('pairs', tA, tB, 'auto');
-      } else if (a.result === 'hide' && b.result === 'hide' && S.recordNonPairs && !identical) {
-        this.save('nonpairs', tA, tB, 'auto');
+      } else if (a.result === 'hide' && b.result === 'hide') {
+        if (S.recordNonPairs && this.stats.complement > 0 && this.stats.identical === 0 && !ambiguous && !identical) {
+          this.save('nonpairs', tA, tB, 'auto');
+        }
       }
     }
 

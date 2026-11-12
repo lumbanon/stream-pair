@@ -37,6 +37,9 @@
     ocrLevel: -1,
     layoutVotes: 0,
     lastLayoutCheck: 0,
+    forceStart: false,     // "New level" button: start even if the board is not face-down
+    lastStartTry: 0,
+    waitReason: 'first frame',
     lastError: '',
     rafOn: false,
     dead: false,
@@ -94,12 +97,21 @@
     const changed = diff > C.S.frameDiff;
     if (changed) { C.lastMini = mini; C.lastFrame = frame; }
 
-    if (!C.grid) { await startLevel(frame, null, 'first frame'); return; }
-
     const t = Date.now();
+    if (!C.grid) { await tryStartLevel(frame, t); return; }
+
     const events = C.memory.update(changed ? frame : C.lastFrame, t, C.S, !changed);
     if (events.some((e) => e.type === 'levelReset')) {
       await startLevel(frame, null, 'board reset detected');
+      return;
+    }
+    if (events.some((e) => e.type === 'boardReplaced')) {
+      waitForBoard('level finished or board changed');
+      return;
+    }
+    if (C.memory.frozen) {
+      C.status = 'board changing… (paused)';
+      renderUI(frame);
       return;
     }
     if (events.length) {
@@ -114,13 +126,50 @@
       const anyGone = C.memory.tiles.some((x) => x.state === 'gone');
       const differs = g && (g.rows !== C.grid.rows || g.cols !== C.grid.cols);
       if (differs && (!anyGone || g.cells.length > C.grid.cells.length)) {
-        if (++C.layoutVotes >= 2) { await startLevel(frame, g, 'new layout detected'); return; }
+        if (++C.layoutVotes >= 2) { waitForBoard('new layout detected'); return; }
       } else C.layoutVotes = 0;
     }
 
     const tilesInPlay = C.memory.tiles.filter((x) => x.state !== 'matched' && x.state !== 'gone').length;
     C.status = `${frame.source === 'video' ? 'video' : 'tab'} · ${C.grid.rows}×${C.grid.cols} · ${tilesInPlay} left`;
     renderUI(frame);
+  }
+
+  /** Forget the current board and wait until a new face-down board is visible. */
+  function waitForBoard(reason) {
+    C.grid = null;
+    C.waitReason = reason;
+    C.lastStartTry = 0;
+    C.result = { known: [], half: [] };
+    C.summary = { known: [], half: [] };
+    C.learner.resetLevel();
+    overlay.renderTiles([], C.result, {});
+    C.status = 'waiting for the next board…';
+    renderUI();
+  }
+
+  /**
+   * Start a level only on a board of mostly face-down cards, so a
+   * level-complete / menu screen is never taken for a board (its graphics
+   * would otherwise be "revealed" and remembered). Checked at most once a
+   * second. "New level" (forceStart) skips the check.
+   */
+  async function tryStartLevel(frame, t) {
+    if (!C.forceStart && t - C.lastStartTry < 1000) return;
+    C.lastStartTry = t;
+    let g = C.S.autoGrid ? SP.grid.detect(frame.imageData) : null;
+    if (!g && !C.S.autoGrid) g = SP.grid.uniform(C.S.rows, C.S.cols);
+    if (!C.forceStart && !(g && SP.LevelMemory.looksFaceDown(frame, g, C.S))) {
+      overlay.renderTiles([], { known: [], half: [] }, {});
+      C.status = 'waiting for a face-down board…';
+      C.info = 'Waiting for a board of face-down cards. Press "New level" to start on the current screen anyway.';
+      renderUI(frame);
+      return;
+    }
+    const reason = C.forceStart ? 'started manually' : C.waitReason;
+    C.forceStart = false;
+    C.waitReason = 'board reset detected';
+    await startLevel(frame, g, reason);
   }
 
   async function startLevel(frame, grid, reason) {
@@ -207,6 +256,9 @@
         C.staleWarned = true;
         C.info = 'Old extension copy detected on this page: reload the tab (F5), otherwise detection will be wrong.';
         renderUI();
+      } else if (C.staleWarned) {
+        C.staleWarned = false;
+        if (C.info.startsWith('Old extension copy')) { C.info = ''; renderUI(); }
       }
     }
     overlay.place(SP.capture.areaViewportRect(C.area));
@@ -234,7 +286,8 @@
   }
 
   function newLevel() {
-    C.grid = null; // next frame calls startLevel()
+    C.grid = null; // next frame calls tryStartLevel()
+    C.forceStart = true;
     C.lastMini = null;
     if (!C.running) start();
   }
@@ -350,7 +403,7 @@
         case 'start': return { ok: start() };
         case 'stop': stop(); return { ok: true };
         case 'newLevel': newLevel(); return { ok: true };
-        case 'regrid': C.grid = null; return { ok: true };
+        case 'regrid': C.grid = null; C.forceStart = true; return { ok: true };
         case 'action': onAction(msg.name); return { ok: true };
         default: return { error: 'unknown message' };
       }
@@ -366,7 +419,7 @@
       overlay.setPanelVisible(C.S.showPanel && (C.running || prev.showPanel !== C.S.showPanel));
       overlay.setDebugVisible(C.S.debug);
       const gridChanged = prev.autoGrid !== C.S.autoGrid || (!C.S.autoGrid && (prev.rows !== C.S.rows || prev.cols !== C.S.cols));
-      if (gridChanged) C.grid = null;
+      if (gridChanged) { C.grid = null; C.forceStart = true; }
       recompute();
       renderUI();
     }
