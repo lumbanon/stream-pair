@@ -36,7 +36,7 @@
       for (let i = 0; i < tiles.length; i++) {
         for (let j = i + 1; j < tiles.length; j++) {
           const r = c(tiles[i].fp, tiles[j].fp, S);
-          if (r.near) cands.push({ a: tiles[i], b: tiles[j], kind: 'identical', score: r.d - 4 * r.h });
+          if (r.near) cands.push({ a: tiles[i], b: tiles[j], kind: 'identical', score: (r.t != null ? r.t / 4 : r.d) - 4 * r.h });
         }
       }
     }
@@ -48,8 +48,8 @@
         const hits = [];
         for (const e of db.pairs || []) {
           const ra = c(e.a, t.fp, S), rb = c(e.b, t.fp, S);
-          if (ra.near) hits.push({ entry: e, side: 'a', d: ra.d });
-          if (rb.near) hits.push({ entry: e, side: 'b', d: rb.d });
+          if (ra.near) hits.push({ entry: e, side: 'a', d: ra.t != null ? ra.t / 4 : ra.d });
+          if (rb.near) hits.push({ entry: e, side: 'b', d: rb.t != null ? rb.t / 4 : rb.d });
         }
         if (hits.length) sideHits.set(t.i, hits);
       }

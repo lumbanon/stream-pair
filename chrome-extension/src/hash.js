@@ -208,9 +208,45 @@
 
   const round4 = (h) => Array.from(h, (v) => Math.round(v * 10000) / 10000);
 
+  /**
+   * Shift-tolerant picture distance (0..255, mean absolute RGB difference).
+   *
+   * Perceptual hashes break when two crops of the same picture are framed a
+   * few percent differently (face-up cards are drawn enlarged and may be
+   * caught mid-"pop"; striped backgrounds turn a small shift into many
+   * flipped dHash bits). Here each card keeps a 16x16 colour thumbnail
+   * (`tiny`). We slide the central 12x12 of one over the other at every
+   * offset up to +-2 cells (+-12% of the card) and keep the best match, both
+   * ways round. Measured on real Stream Pairs cards: identical items 5-29,
+   * different items 42+.
+   */
+  const TN = 16, TM = 2, TW = TN - 2 * TM;
+  function tinyOneWay(A, B, limit) {
+    let best = Infinity;
+    const stop = limit * TW * TW * 3; // early exit once a window is clearly worse
+    for (let oy = 0; oy <= 2 * TM; oy++) {
+      for (let ox = 0; ox <= 2 * TM; ox++) {
+        let sum = 0;
+        for (let y = 0; y < TW && sum < stop; y++) {
+          let ka = ((y + TM) * TN + TM) * 3;
+          let kb = ((y + oy) * TN + ox) * 3;
+          for (let x = 0; x < TW * 3; x++) sum += Math.abs(A[ka + x] - B[kb + x]);
+        }
+        if (sum < best) best = sum;
+      }
+    }
+    return best / (TW * TW * 3);
+  }
+  function tinyDist(A, B) {
+    if (!A || !B || A.length !== TN * TN * 3 || B.length !== TN * TN * 3) return Infinity;
+    const ab = tinyOneWay(A, B, 255);
+    return Math.min(ab, tinyOneWay(B, A, ab));
+  }
+
   /** Item fingerprint saved when a tile is revealed. JSON-serialisable. */
   function fingerprint(img, rect) {
     return {
+      tiny: Array.from(sampleRGB(img, rect, TN, TN), (v) => Math.round(v)),
       dhash: dHash(img, rect),
       dhashv: dHashV(img, rect),
       phash: pHash(img, rect),
@@ -231,9 +267,22 @@
     return c.toDataURL('image/jpeg', 0.8);
   }
 
+  // Results are cached per fingerprint pair: fingerprints never change, and
+  // the matcher re-compares the same remembered tiles after every reveal.
+  const cache = new WeakMap();
+  function cachedTiny(a, b) {
+    let m = cache.get(a);
+    if (!m) { m = new WeakMap(); cache.set(a, m); }
+    let v = m.get(b);
+    if (v === undefined) { v = tinyDist(a.tiny, b.tiny); m.set(b, v); }
+    return v;
+  }
+
   /**
    * Distance between two fingerprints under the active settings.
-   * Returns { d: hamming, h: histSim, near: boolean }.
+   * Returns { d: hamming, h: histSim, t: picture distance or null, near }.
+   * With `tiny` on both sides the shift-tolerant picture distance decides
+   * (t <= pictureMax); entries from older versions fall back to the hash.
    */
   function compare(a, b, S) {
     const type = S.hashType || 'dhash';
@@ -242,7 +291,12 @@
     // (entries saved by older versions only have the horizontal one).
     if (type === 'dhash' && a && b && a.dhashv && b.dhashv) d = Math.round((d + hamming(a.dhashv, b.dhashv)) / 2);
     const h = histSim(a && a.hist, b && b.hist);
-    return { d, h, near: d <= S.hashThreshold && h >= S.histMin };
+    if (a && b && a.tiny && b.tiny) {
+      if (h < S.histMin) return { d, h, t: null, near: false }; // cheap reject first
+      const t = cachedTiny(a, b);
+      return { d, h, t, near: t <= (S.pictureMax || 34) };
+    }
+    return { d, h, t: null, near: d <= S.hashThreshold && h >= S.histMin };
   }
 
   function colorDist(a, b) {
@@ -251,7 +305,7 @@
   }
 
   SP.hash = {
-    sampleRGB, sampleGray, toGray, dHash, dHashV, pHash, hamming, histogram, histSim,
+    sampleRGB, sampleGray, toGray, dHash, dHashV, pHash, tinyDist, hamming, histogram, histSim,
     mad, meanStd, signature, fingerprint, thumbnail, compare, colorDist,
   };
 })();

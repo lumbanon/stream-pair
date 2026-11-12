@@ -417,7 +417,8 @@
           if (t.state === 'matched') bad++; // revealed -> back is a normal flip
         } else if (t.fp && sig.cover >= CARD_MIN) {
           const cur = H().fingerprint(frame.imageData, this.cardRectPx(t, frame, S));
-          if (H().compare(cur, t.fp, S).d > 2 * S.hashThreshold + 4) bad++;
+          const r = H().compare(cur, t.fp, { ...S, histMin: 0 });
+          if (r.t != null ? r.t > 1.5 * (S.pictureMax || 34) : r.d > 2 * S.hashThreshold + 4) bad++;
         } else if (sig.cover < CARD_MIN && !this.isEmpty(sig, S)) {
           bad++;
         }

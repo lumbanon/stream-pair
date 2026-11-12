@@ -41,8 +41,8 @@
     <h2>Grid</h2>
     <div class="row">
       <label class="chk"><input type="checkbox" id="autoGrid"> Auto-detect</label>
-      <label>Rows <input type="number" id="rows" min="1" max="15"></label>
-      <label>Cols <input type="number" id="cols" min="1" max="15"></label>
+      <label>Rows <input type="number" id="rows" min="1" max="20"></label>
+      <label>Cols <input type="number" id="cols" min="1" max="20"></label>
       <button id="regrid" title="Rebuild grid on the next frame">Re-detect</button>
     </div>
     <div class="row">
@@ -68,7 +68,11 @@
       </label>
     </div>
     <div class="row slider">
-      <label for="hashThreshold">Hash distance ≤ <b id="hashThresholdV"></b></label>
+      <label for="pictureMax">Picture distance ≤ <b id="pictureMaxV"></b> <span class="muted">(shift-tolerant; main identical test)</span></label>
+      <input type="range" id="pictureMax" min="10" max="60" step="1">
+    </div>
+    <div class="row slider">
+      <label for="hashThreshold">Hash distance ≤ <b id="hashThresholdV"></b> <span class="muted">(only for pairs saved by older versions)</span></label>
       <input type="range" id="hashThreshold" min="0" max="20" step="1">
     </div>
     <div class="row slider">

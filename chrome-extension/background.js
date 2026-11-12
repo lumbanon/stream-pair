@@ -31,7 +31,7 @@ async function captureCrop(msg, sender) {
   const sy = Math.max(0, Math.round(msg.rect.y * k));
   const sw = Math.max(1, Math.min(full.width - sx, Math.round(msg.rect.w * k)));
   const sh = Math.max(1, Math.min(full.height - sy, Math.round(msg.rect.h * k)));
-  const scale = Math.min(1, (msg.maxW || 960) / sw);
+  const scale = Math.min(1, (msg.maxW || 1280) / sw);
   const w = Math.max(1, Math.round(sw * scale));
   const h = Math.max(1, Math.round(sh * scale));
   const canvas = new OffscreenCanvas(w, h);
@@ -69,7 +69,7 @@ async function ocr(images) {
 
 async function dedupeSettings() {
   const S = await SP.loadSettings();
-  return { hashType: S.hashType, hashThreshold: S.hashThreshold, histMin: S.histMin };
+  return { hashType: S.hashType, hashThreshold: S.hashThreshold, histMin: S.histMin, pictureMax: S.pictureMax };
 }
 
 function bump() { return chrome.storage.local.set({ dbVersion: Date.now() }); }

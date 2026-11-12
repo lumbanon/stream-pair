@@ -94,8 +94,17 @@ about 2 fps. A frame is analysed only if a 40×24 grey miniature differs from th
 analysed frame by more than `frameDiff`.
 
 ### Level types
-- **Identical:** two tiles match when the hash Hamming distance ≤ *Hash distance*
-  (default 6) and the histogram similarity ≥ *Colour similarity*.
+- **Identical:** two tiles match when their *picture distance* ≤ **Picture distance**
+  (default 34) and their colours are similar (≥ *Colour similarity*). Picture distance
+  compares a 16×16 colour thumbnail of each card at small offsets (up to about 12% of the
+  card) and keeps the best match. So the same picture still matches when one copy is
+  framed differently, for example a face-up card drawn enlarged or caught mid-animation.
+  On real Stream Pairs cards, identical items measured 5–29 and different items 42 or
+  more. *Hash distance* is only used for pairs saved by older versions of the extension.
+- **Later levels with more, smaller cards:** grids up to 20×20 are detected, and
+  analysis runs at up to 1280 px wide. Tested on boards from 6×9 up to 12×16, with cards
+  down to about 50 px. If later boards are bigger than the first one, draw the board
+  area with some margin: auto-detection handles a margin fine.
 - **Complement** (basketball ↔ net): learned from the game itself. Whenever both tiles
   of a guess end up matched (they stay up or are removed) and they look different, the
   pair `{hashA, hashB, thumbA, thumbB, timesSeen}` is saved. When both flip back, they

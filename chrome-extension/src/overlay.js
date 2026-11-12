@@ -68,7 +68,7 @@
   `;
 
   const TUNE_KEYS = [
-    ['hashThreshold', 'hash ≤', 1], ['histMin', 'hist ≥', 0.05], ['revealDiff', 'revealDiff', 1],
+    ['pictureMax', 'picture ≤', 1], ['hashThreshold', 'hash ≤', 1], ['histMin', 'hist ≥', 0.05], ['revealDiff', 'revealDiff', 1],
     ['backHistMin', 'backHist ≥', 0.05], ['stableDiff', 'stableDiff', 0.5], ['stableFrames', 'stableFrames', 1],
     ['emptyStd', 'emptyStd', 0.5], ['matchPersistMs', 'persist ms', 500], ['insetFrac', 'inset', 0.02],
     ['pairWindowMs', 'pair win ms', 250], ['frameDiff', 'frameDiff', 0.1], ['fps', 'fps', 1],

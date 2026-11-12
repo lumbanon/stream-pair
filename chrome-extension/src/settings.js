@@ -10,6 +10,8 @@
     hashType: 'dhash',       // 'dhash' | 'phash'
     hashThreshold: 6,        // max Hamming distance (0..64) for "same picture"
     histMin: 0.6,            // min colour-histogram intersection (0..1)
+    pictureMax: 34,          // max shift-tolerant picture distance (0..255) for "same picture"
+                             // (real cards: identical 5-29, different 42+)
 
     // Grid
     autoGrid: true,

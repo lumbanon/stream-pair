@@ -8,6 +8,9 @@
   const SP = (globalThis.SP = globalThis.SP || {});
   if (SP.grid) return;
 
+  // Largest rows/cols count accepted. Later levels use more, smaller cards.
+  const MAX_CELLS = 20;
+
   function makeCells(colSegs, rowSegs) {
     const cells = [];
     rowSegs.forEach((rs, r) => colSegs.forEach((cs, c) => {
@@ -99,7 +102,7 @@
     const widths = merged.map((r) => r[1] - r[0]);
     const med = percentile(widths, 0.5);
     runs = merged.filter((r) => r[1] - r[0] >= 0.45 * med);
-    if (runs.length < 2 || runs.length > 15) return null;
+    if (runs.length < 2 || runs.length > MAX_CELLS) return null;
     const ws = runs.map((r) => r[1] - r[0]);
     const { mean, std } = SP.hash.meanStd(ws);
     if (std / mean > 0.35) return null;
@@ -117,7 +120,7 @@
     const { mean } = SP.hash.meanStd(edge);
     const e = edge.map((v) => v - mean);
     let best = 0, bestLag = 0;
-    const minLag = Math.max(3, Math.floor(n / 16));
+    const minLag = Math.max(3, Math.floor(n / (MAX_CELLS + 1)));
     const maxLag = Math.floor(n / 2);
     let e0 = 0;
     for (let i = 0; i < n; i++) e0 += e[i] * e[i];
@@ -138,7 +141,7 @@
       if (ac[lag] >= 0.85 * best && ac[lag] >= ac[lag - 1] && ac[lag] >= ac[lag + 1]) { bestLag = lag; break; }
     }
     const count = Math.round(n / bestLag);
-    return count >= 2 && count <= 15 ? count : 0;
+    return count >= 2 && count <= MAX_CELLS ? count : 0;
   }
 
   /**
@@ -216,7 +219,9 @@
   function detect(img) {
     const { data, width: W, height: H } = img;
     if (W < 20 || H < 20) return null;
-    const s = Math.max(1, Math.floor(W / 480));
+    // ~640 samples across: later levels have smaller cards and gutters only a
+    // pixel or two wide at analysis resolution.
+    const s = Math.max(1, Math.floor(W / 640));
     const nx = Math.floor(W / s), ny = Math.floor(H / s);
 
     // Edge-energy projections (independent of the background guess).

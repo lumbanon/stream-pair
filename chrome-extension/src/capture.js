@@ -12,7 +12,7 @@
   const SP = (globalThis.SP = globalThis.SP || {});
   if (SP.capture) return;
 
-  const MAX_W = 960;          // analysis width cap (CPU)
+  const MAX_W = 1280;         // analysis width cap (CPU); high enough for small cards on dense boards
   const TAB_MIN_INTERVAL = 520; // Chrome allows ~2 captureVisibleTab calls per second
 
   /** Largest visible, playing-capable <video> on the page. */

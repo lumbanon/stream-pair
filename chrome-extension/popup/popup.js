@@ -101,7 +101,7 @@ function bindSettings() {
   const checks = ['autoGrid', 'ocrEnabled', 'recordNonPairs', 'showPanel', 'debug'];
   const nums = ['rows', 'cols'];
   const selects = ['mode', 'hashType'];
-  const ranges = ['hashThreshold', 'histMin'];
+  const ranges = ['pictureMax', 'hashThreshold', 'histMin'];
   const show = () => {
     checks.forEach((k) => { $(k).checked = !!settings[k]; });
     nums.forEach((k) => { $(k).value = settings[k]; });
@@ -111,7 +111,7 @@ function bindSettings() {
   show();
   const save = async (patch) => { settings = await SP.saveSettings(patch); show(); };
   checks.forEach((k) => $(k).addEventListener('change', (e) => save({ [k]: e.target.checked })));
-  nums.forEach((k) => $(k).addEventListener('change', (e) => save({ [k]: Math.max(1, Math.min(15, parseInt(e.target.value, 10) || 1)) })));
+  nums.forEach((k) => $(k).addEventListener('change', (e) => save({ [k]: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)) })));
   selects.forEach((k) => $(k).addEventListener('change', (e) => save({ [k]: e.target.value })));
   ranges.forEach((k) => {
     $(k).addEventListener('input', (e) => { $(`${k}V`).textContent = e.target.value; });

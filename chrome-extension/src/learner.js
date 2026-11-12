@@ -16,14 +16,14 @@
   const DB_NAME = 'stream-pairs';
   const DB_VERSION = 1;
   const STORES = ['pairs', 'nonpairs'];
-  const DEDUPE = { hashType: 'dhash', hashThreshold: 6, histMin: 0.6 };
+  const DEDUPE = { hashType: 'dhash', hashThreshold: 6, histMin: 0.6, pictureMax: 34 };
 
   function req(r) {
     return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   }
 
   function side(fp, thumb) {
-    return { dhash: fp.dhash, dhashv: fp.dhashv || null, phash: fp.phash, hist: Array.from(fp.hist), thumb: thumb || null };
+    return { dhash: fp.dhash, dhashv: fp.dhashv || null, phash: fp.phash, hist: Array.from(fp.hist), tiny: fp.tiny || null, thumb: thumb || null };
   }
 
   /** Does entry e describe the same pair as (a, b), in either order? */
