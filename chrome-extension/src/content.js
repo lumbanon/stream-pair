@@ -59,6 +59,13 @@
 
   const overlay = new SP.Overlay({
     onTileClick: (i) => onTileClick(i),
+    // "Needs teaching" list: click two cards there to save them as a pair.
+    onTeachPick: async (i) => {
+      const prev = C.interactive;
+      C.interactive = 'teach';
+      try { await onTileClick(i); } finally { if (prev !== 'teach') C.interactive = prev; }
+      renderUI();
+    },
     onAction: (name) => onAction(name),
     onSetting: (k, v) => SP.saveSettings({ [k]: v }),
   });
@@ -133,6 +140,10 @@
     const tilesInPlay = C.memory.tiles.filter((x) => x.state !== 'matched' && x.state !== 'gone').length;
     C.status = `${frame.source === 'video' ? 'video' : 'tab'} · ${C.grid.rows}×${C.grid.cols} · ${tilesInPlay} left`;
     renderUI(frame);
+    // AUTOPLAY-TEST: test auto-play on your own hosted game (src/autoplay.js)
+    if (SP.autoplay && SP.autoplay.tick) {
+      SP.autoplay.tick(C).then((note) => { if (note !== C.apNote) { C.apNote = note; renderUI(); } }, () => {});
+    }
   }
 
   /** Forget the current board and wait until a new face-down board is visible. */
@@ -223,14 +234,15 @@
 
   function recompute() {
     if (!C.grid) { C.result = { known: [], half: [] }; C.summary = { known: [], half: [] }; return; }
-    C.result = SP.matcher.findPairs(C.memory.rememberedTiles(), { pairs: C.learner.pairs, nonPairs: C.learner.nonPairs }, C.S);
+    C.result = SP.matcher.findPairs(C.memory.rememberedTiles(), { pairs: C.learner.pairs, nonPairs: C.learner.nonPairs }, C.S, C.memory.tiles);
     C.summary = SP.matcher.summarize(C.result);
   }
 
   function renderUI(frame) {
     overlay.renderPanel({
       status: C.status, running: C.running, mode: C.S.mode, interactive: C.interactive,
-      debug: C.S.debug, info: C.info, summary: C.summary,
+      debug: C.S.debug, info: [C.info, C.apNote].filter(Boolean).join(' · '), // apNote: AUTOPLAY-TEST
+      summary: C.summary, selected: C.selected,
     });
     if (C.grid) overlay.renderTiles(C.memory.tiles, C.result, { interactive: !!C.interactive, selected: C.selected });
     if (C.S.debug && C.grid) {

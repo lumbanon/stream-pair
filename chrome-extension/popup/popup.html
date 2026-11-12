@@ -91,6 +91,20 @@
     <div id="half"></div>
   </section>
 
+  <!-- AUTOPLAY-TEST: remove this section with src/autoplay.js -->
+  <section id="autoplay">
+    <h2>Test auto-play (your own game only)</h2>
+    <div class="row">
+      <input type="password" id="apToken" placeholder="Twitch token (chat:read chat:edit)" autocomplete="off">
+      <button id="apSave">Save token</button>
+    </div>
+    <div id="apStatus" class="muted"></div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="apEnabled"> Auto-play on my streampairs.com host screen</label>
+      <label>every <input type="number" id="apInterval" min="2" max="60"> s</label>
+    </div>
+  </section>
+
   <footer>
     <a href="#" id="gallery">Pair database (gallery, export/import)</a>
   </footer>
@@ -99,5 +113,6 @@
   <script src="../src/hash.js"></script>
   <script src="../src/learner.js"></script>
   <script src="popup.js"></script>
+  <script src="../src/autoplay.js"></script><!-- AUTOPLAY-TEST -->
 </body>
 </html>

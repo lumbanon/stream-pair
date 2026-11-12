@@ -27,7 +27,7 @@
    * Returns { known: [{a, b, kind, score, color}], half: [{tile, partnerThumb, kind}] }
    * where a/b are tile objects.
    */
-  function findPairs(tiles, db, S) {
+  function findPairs(tiles, db, S, allTiles) {
     const c = SP.hash.compare;
     const mode = S.mode || 'auto';
     const cands = [];
@@ -43,10 +43,12 @@
 
     // For each tile, which learned entries/sides it resembles.
     const sideHits = new Map(); // tile.i -> [{ entry, side: 'a'|'b', d }]
-    if (mode === 'complement' || mode === 'auto') {
+    // Pairs you taught by hand always count, even in Identical mode.
+    const entries = mode === 'identical' ? (db.pairs || []).filter((e) => e.source === 'teach') : (db.pairs || []);
+    if (entries.length) {
       for (const t of tiles) {
         const hits = [];
-        for (const e of db.pairs || []) {
+        for (const e of entries) {
           const ra = c(e.a, t.fp, S), rb = c(e.b, t.fp, S);
           if (ra.near) hits.push({ entry: e, side: 'a', d: ra.t != null ? ra.t / 4 : ra.d });
           if (rb.near) hits.push({ entry: e, side: 'b', d: rb.t != null ? rb.t / 4 : rb.d });
@@ -98,7 +100,13 @@
       half.push({ tile: t, partnerThumb, kind: partnerThumb ? 'complement' : 'unknown' });
     }
     half.sort((p, q) => p.tile.num - q.tile.num);
-    return { known, half };
+
+    // Stuck: every card still in play has been seen, yet these have no
+    // partner the helper can recognise. They can only pair among themselves,
+    // so the user is asked to teach them (Needs teaching).
+    const allSeen = allTiles ? allTiles.every((t) => t.state === 'matched' || t.state === 'gone' || t.fp) : false;
+    const stuck = allSeen ? half.map((h) => h.tile) : [];
+    return { known, half, stuck };
   }
 
   /** Plain, message-safe summary for the popup. */
@@ -109,6 +117,7 @@
         return { a: x.num, b: y.num, kind: p.kind, color: p.color, thumbA: x.thumb, thumbB: y.thumb };
       }),
       half: result.half.map((h) => ({ num: h.tile.num, thumb: h.tile.thumb, partnerThumb: h.partnerThumb, kind: h.kind })),
+      stuck: (result.stuck || []).map((t) => ({ i: t.i, num: t.num, thumb: t.thumb })),
     };
   }
 

@@ -10,7 +10,8 @@
     "https://kick.com/*",
     "https://*.kick.com/*",
     "https://streampairs.com/*",
-    "https://*.streampairs.com/*"
+    "https://*.streampairs.com/*",
+    "https://id.twitch.tv/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -51,6 +52,7 @@
         "src/matcher.js",
         "src/overlay.js",
         "src/selector.js",
+        "src/autoplay.js",
         "src/content.js"
       ],
       "run_at": "document_idle"

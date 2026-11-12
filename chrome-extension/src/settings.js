@@ -44,7 +44,7 @@
   SP.CONTENT_FILES = [
     'src/settings.js', 'src/hash.js', 'src/grid.js', 'src/capture.js', 'src/ocr.js',
     'src/memory.js', 'src/learner.js', 'src/matcher.js', 'src/overlay.js',
-    'src/selector.js', 'src/content.js',
+    'src/selector.js', 'src/autoplay.js' /* AUTOPLAY-TEST */, 'src/content.js',
   ];
 
   SP.loadSettings = async function loadSettings() {

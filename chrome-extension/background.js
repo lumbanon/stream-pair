@@ -1,6 +1,7 @@
 // Service worker: tab screenshots (fallback capture), the pair database, and
 // the offscreen document that hosts Tesseract.js.
 importScripts('src/settings.js', 'src/hash.js', 'src/learner.js');
+try { importScripts('src/autoplay.js'); } catch (e) { /* AUTOPLAY-TEST: optional, removable */ }
 
 const SP = globalThis.SP;
 const db = new SP.PairDB();

@@ -133,6 +133,64 @@ The pair database lives in the extension's IndexedDB, so it is shared across str
 sites and levels, and grows as you watch. The popup shows "N pairs learned". Open the
 gallery (popup footer, or the extension's Options) to review, delete, export or import it.
 
+## Needs teaching
+Sometimes every card in play has been seen but some still have no partner the helper
+recognises. It can't tell which ones go together, because the pictures differ and no
+learned pair covers them. Those cards are:
+- listed under **Needs teaching** in the floating panel, with their pictures;
+- outlined in orange on the board.
+
+Click the two cards of a pair in that list to save them. You don't need Teach mode or
+the board. A saved pair is remembered for good, and it counts in every mode, including
+**Identical**.
+
+## Test auto-play (temporary, your own game only)
+For testing, the helper can play **your own hosted game**, so it moves through the
+levels and learns each level's pairs. Guesses are posted from your Twitch account to your
+own channel. They show up in Chatterino like any other message.
+
+Safeguards built into `src/autoplay.js`:
+- Off by default.
+- Only runs while the board comes from the **streampairs.com host screen**.
+- The token is checked with Twitch, and the helper only ever joins and posts to the
+  **token owner's own channel**.
+- Only messages shaped like `7 30` can be sent, with at least 1.5 s between messages.
+
+How it picks the next guess, without repeating a combination it already tried in the
+level:
+1. A known pair.
+2. Otherwise two never-seen cards, which reveals the most per guess.
+3. Otherwise an unseen card with a half-known one.
+4. Otherwise untried combinations of stuck cards.
+
+It waits until the previous guess has flipped back or been matched. When it can't do
+anything more, it tells you to use **Needs teaching**.
+
+### Setup
+1. Get a Twitch user access token with the scopes `chat:read` and `chat:edit`, the
+   official way:
+   1. Register an application at <https://dev.twitch.tv/console/apps>, with OAuth
+      Redirect URL `http://localhost`.
+   2. Open the following URL while logged in as your streaming account. Replace
+      `YOUR_CLIENT_ID` with your app's client ID first:
+      `https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost&scope=chat%3Aread+chat%3Aedit`
+   3. Approve the request. The browser then lands on `http://localhost/#access_token=...`
+      (the page itself won't load). Copy the `access_token` value.
+2. In the extension popup, find **Test auto-play**. Paste the token and click **Save
+   token**. The popup checks it and shows which channel it will post to.
+3. Tick **Auto-play on my streampairs.com host screen** and set the interval (default 5 s).
+4. Start a game on `streampairs.com/en/system` and start scanning as usual.
+
+The token is stored only in this browser's extension storage. To revoke it, go to
+<https://www.twitch.tv/settings/connections>.
+
+### Removing it
+1. Delete `src/autoplay.js`.
+2. Remove every line marked `AUTOPLAY-TEST`. Search for that word; it appears in
+   `background.js`, `src/content.js`, `src/settings.js` and `popup/popup.html` (the
+   `<section id="autoplay">` block).
+3. Remove `"src/autoplay.js"` and `"https://id.twitch.tv/*"` from `manifest.json`.
+
 ## Tuning (Debug panel)
 For every tile, the Debug panel shows the live crop, number (`(o)` = reading-order
 guess, `(m)` = typed by you), state, dHash/pHash, and:

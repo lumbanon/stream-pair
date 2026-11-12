@@ -19,6 +19,12 @@
   .tile.half { border-color: #fff; border-style: dashed; }
   .tile.pair { border-width: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 8px currentColor; }
   .tile.selected { box-shadow: 0 0 0 3px #fff, 0 0 12px #fff; }
+  .tile.stuck { border: 3px solid #ff9f1a; box-shadow: 0 0 10px #ff9f1a; }
+  .teach { display: flex; flex-wrap: wrap; gap: 4px; }
+  .teach button { padding: 2px; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 10px; }
+  .teach button img { width: 32px; height: 32px; object-fit: cover; border-radius: 3px; }
+  .teach button.sel { background: #ff9f1a; border-color: #ff9f1a; color: #000; }
+  .sec.warn { color: #ff9f1a; }
   .tile.solved { opacity: .25; }
   .tile .num { position: absolute; left: 2px; bottom: 2px; font: 700 11px/1 system-ui; color: #fff;
     background: rgba(0,0,0,.65); padding: 2px 4px; border-radius: 3px; }
@@ -186,11 +192,14 @@
       this.runBtn = el('button', { text: 'Start', onclick: () => this.cb.onAction('toggleRun') });
       this.pairsEl = el('div');
       this.halfEl = el('div');
+      this.stuckSec = el('div', { class: 'sec warn', text: 'Needs teaching: click the two cards of a pair' });
+      this.stuckEl = el('div', { class: 'teach' });
       this.infoEl = el('div', { class: 'empty' });
       const body = el('div', { class: 'body' }, [
         el('div', { class: 'row' }, [this.runBtn, this.modeSel, el('button', { text: 'New level', onclick: () => this.cb.onAction('newLevel') })]),
         el('div', { class: 'row' }, [this.teachBtn, this.editBtn, this.debugBtn]),
         this.infoEl,
+        this.stuckSec, this.stuckEl,
         el('div', { class: 'sec', text: 'Ready pairs (known)' }), this.pairsEl,
         el('div', { class: 'sec', text: 'Half-known (partner unseen)' }), this.halfEl,
       ]);
@@ -277,11 +286,12 @@
       const pairOf = new Map();
       for (const p of result.known) { pairOf.set(p.a.i, p); pairOf.set(p.b.i, p); }
       const halfSet = new Set(result.half.map((h) => h.tile.i));
+      const stuckSet = new Set((result.stuck || []).map((t) => t.i));
       tiles.forEach((t, k) => {
         const e = this.tileEls[k];
         const p = pairOf.get(t.i);
         const solved = t.state === 'matched' || t.state === 'gone';
-        const cls = ['tile', p ? 'pair' : halfSet.has(t.i) ? 'half' : t.fp && !solved ? 'seen' : '',
+        const cls = ['tile', p ? 'pair' : stuckSet.has(t.i) ? 'stuck' : halfSet.has(t.i) ? 'half' : t.fp && !solved ? 'seen' : '',
           solved ? 'solved' : '', ui.selected && ui.selected.includes(t.i) ? 'selected' : ''].join(' ');
         const key = `${cls}|${p ? p.color : ''}|${t.num}|${t.numSource}|${t.thumb ? t.thumb.length : 0}|${t.cell.x},${t.cell.y}`;
         if (key === e.key) return;
@@ -310,9 +320,21 @@
       this.editBtn.classList.toggle('on', st.interactive === 'edit');
       this.debugBtn.classList.toggle('on', !!st.debug);
       this.infoEl.textContent = st.info || '';
-      const key = JSON.stringify([st.summary.known.map((p) => [p.a, p.b, p.color, p.kind]), st.summary.half.map((h) => [h.num, !!h.partnerThumb])]);
+      const stuck = st.summary.stuck || [];
+      const sel = st.selected || [];
+      const key = JSON.stringify([st.summary.known.map((p) => [p.a, p.b, p.color, p.kind]), st.summary.half.map((h) => [h.num, !!h.partnerThumb]),
+        stuck.map((s) => [s.i, s.num]), sel]);
       if (key === this.lastPanelKey) return;
       this.lastPanelKey = key;
+      this.stuckEl.textContent = '';
+      this.stuckSec.style.display = stuck.length ? '' : 'none';
+      this.stuckEl.style.display = stuck.length ? '' : 'none';
+      for (const s of stuck) {
+        const b = el('button', { title: `Card ${s.num}: click, then click its partner` }, [s.thumb ? el('img', { src: s.thumb }) : null, el('span', { text: String(s.num) })]);
+        if (sel.includes(s.i)) b.classList.add('sel');
+        b.addEventListener('click', () => this.cb.onTeachPick && this.cb.onTeachPick(s.i));
+        this.stuckEl.append(b);
+      }
       this.pairsEl.textContent = '';
       this.halfEl.textContent = '';
       if (!st.summary.known.length) this.pairsEl.append(el('div', { class: 'empty', text: 'none yet' }));
