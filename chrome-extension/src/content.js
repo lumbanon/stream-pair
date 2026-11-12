@@ -97,6 +97,7 @@
 
   async function onFrame(frame) {
     C.lastError = '';
+    C.lastFrameAt = Date.now();
     // Cheap change test on a 40x24 miniature against the last PROCESSED frame,
     // so slow drifts still accumulate into a change eventually.
     const mini = SP.capture.miniature(frame.imageData);
@@ -143,6 +144,20 @@
     renderUI(frame);
     apTick();
   }
+
+  // Watchdog: no frames means the helper is blind (tab hidden/covered,
+  // capture failing). Say so in the panel instead of a frozen status.
+  setInterval(() => {
+    if (C.dead || !C.running || Date.now() - (C.lastFrameAt || 0) < 3000) return;
+    const hidden = document.visibilityState !== 'visible';
+    const why = hidden
+      ? 'the game tab is hidden or fully covered by another window. Keep it visible (e.g. Chatterino beside it, not on top).'
+      : C.lastError ? `capture failing (${C.lastError.slice(0, 60)})` : 'no frames from the game tab';
+    C.status = hidden ? 'not watching: tab hidden' : 'not watching: no frames';
+    // AUTOPLAY-TEST
+    if (SP.autoplay && SP.autoplay.paused) C.apNote = SP.autoplay.paused(why);
+    renderUI();
+  }, 1000);
 
   // AUTOPLAY-TEST: test auto-play on your own hosted game (src/autoplay.js)
   function apTick() {
@@ -288,6 +303,7 @@
   function start() {
     if (!C.area) { overlay.toast('Select the board area first'); return false; }
     C.running = true;
+    C.lastFrameAt = Date.now(); // grace period for the watchdog
     overlay.setPanelVisible(C.S.showPanel);
     overlay.setDebugVisible(C.S.debug);
     ensureRaf();

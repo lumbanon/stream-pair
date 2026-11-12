@@ -186,6 +186,12 @@ anything more, it tells you to use **Needs teaching**.
 4. Start a game on `streampairs.com/en/system` and start scanning as usual.
 
 ### If it doesn't type
+- **Keep the game tab visible.** Chrome stops drawing a tab that is minimised, in the
+  background or completely covered by another window, such as a maximised Chatterino. The
+  helper can't see the board then, and says `not watching: tab hidden`. Put Chatterino
+  beside the browser, not on top of it.
+- A card that stays face-up or mid-flip for more than 12 s after a guess no longer blocks
+  auto-play. Auto-play just leaves that card out of its next guesses.
 - The popup shows **Game tab: …**, the latest auto-play status from the game tab, for
   example `waiting for cards 12, 40 to settle`, `next guess in 3 s`, or an error. The same
   text appears in the floating panel.

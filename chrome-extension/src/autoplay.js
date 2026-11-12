@@ -27,6 +27,9 @@
   const NOTE_KEY = 'autoplayNote'; // last status from the game tab, shown in the popup
   const GUESS_RE = /^\d{1,3} \d{1,3}$/;
   const MIN_GAP_MS = 1500;
+  // Cards that stay "face-up / flipping" this long after the last guess no
+  // longer block auto-play (a solved card drawn differently, a misread tile).
+  const BUSY_MAX_MS = 12000;
   const isWorker = typeof document === 'undefined' && typeof importScripts === 'function';
   const isPopup = !isWorker && location.protocol === 'chrome-extension:' && !!document.getElementById('autoplay');
   const isContent = !isWorker && !isPopup && location.protocol === 'https:';
@@ -170,7 +173,7 @@
   if (!isContent) return;
   const onHostScreen = /(^|\.)streampairs\.com$/.test(location.hostname);
 
-  const st = { cfg: null, level: -1, tried: new Set(), lastSent: 0, lastBusy: 0, sending: false, backoffUntil: 0, note: '' };
+  const st = { cfg: null, level: -1, tried: new Set(), lastSent: 0, lastBusy: 0, busySince: 0, sending: false, backoffUntil: 0, note: '' };
   loadCfg().then((c) => { st.cfg = c; });
   chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch[KEY]) st.cfg = { ...st.cfg, ...ch[KEY].newValue }; });
 
@@ -185,8 +188,8 @@
    *  4. two half-known cards that were not tried together yet
    * Never repeats a combination already tried in this level.
    */
-  function choose(C) {
-    const fresh = (a, b) => a && b && a !== b && !st.tried.has(pairKey(a, b));
+  function choose(C, skip) {
+    const fresh = (a, b) => a && b && a !== b && !skip.has(a) && !skip.has(b) && !st.tried.has(pairKey(a, b));
     for (const p of C.result.known) if (fresh(p.a, p.b)) return [p.a, p.b];
     const tiles = C.memory.tiles;
     const unseen = shuffle(tiles.filter((t) => t.state === 'hidden' && !t.fp));
@@ -222,15 +225,18 @@
     const last = st.note ? ` (last: ${st.note.replace(/^Auto-play /, '')})` : '';
     // Let the previous guess finish: nothing face-up or flipping, then a short pause.
     const busy = C.memory.tiles.filter((t) => t.state === 'flipping' || t.state === 'revealed');
-    if (busy.length) {
-      st.lastBusy = now;
-      return `Auto-play: waiting for card${busy.length > 1 ? 's' : ''} ${busy.slice(0, 4).map((t) => t.num).join(', ')} to settle${last}`;
+    if (busy.length) st.busySince = st.busySince || now;
+    else if (st.busySince) { st.busySince = 0; st.lastBusy = now; }
+    const waited = busy.length ? now - Math.max(st.busySince, st.lastSent) : 0;
+    if (busy.length && waited < BUSY_MAX_MS) {
+      return `Auto-play: waiting for card${busy.length > 1 ? 's' : ''} ${busy.slice(0, 4).map((t) => t.num).join(', ')} to settle` +
+        ` (${Math.ceil((BUSY_MAX_MS - waited) / 1000)} s)${last}`;
     }
     if (st.sending) return 'Auto-play: sending…';
     if (now < st.backoffUntil) return `${st.note} · retry in ${Math.ceil((st.backoffUntil - now) / 1000)} s`;
     const due = Math.max(st.lastBusy + 1500, st.lastSent + (cfg.intervalSec || 5) * 1000);
     if (now < due) return `Auto-play: next guess in ${Math.ceil((due - now) / 1000)} s${last}`;
-    const g = choose(C);
+    const g = choose(C, new Set(busy));
     if (!g) {
       return C.result.stuck && C.result.stuck.length
         ? 'Auto-play stuck: teach the cards under "Needs teaching"'
@@ -243,6 +249,7 @@
       if (r && r.ok) {
         st.tried.add(pairKey(g[0], g[1]));
         st.lastSent = Date.now();
+        st.busySince = 0;
         st.note = `Auto-play sent "${text}"`;
       } else {
         st.backoffUntil = Date.now() + 15000;
@@ -257,5 +264,11 @@
     return st.note;
   }
 
-  SP.autoplay = { tick };
+  /** The game tab stopped delivering frames: say so instead of a stale note. */
+  function paused(reason) {
+    if (!st.cfg || !st.cfg.enabled) return '';
+    return publish(`Auto-play paused: ${reason}`);
+  }
+
+  SP.autoplay = { tick, paused };
 })();
