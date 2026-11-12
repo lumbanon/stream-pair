@@ -65,14 +65,17 @@
    *  - Columns that cross a column of tiles have a high foreground fraction;
    *    the gutters between tiles are mostly background, so they dip.
    *  - Threshold at 40% of the robust maximum (95th percentile), collect runs
-   *    above it, merge runs split by tiny dips (dark artwork inside a tile),
-   *    and drop slivers much narrower than the typical tile.
+   *    above it, merge runs split by dips narrower than minGapFrac of the
+   *    axis (dark artwork inside a tile), and drop slivers much narrower than
+   *    the typical tile. Real gutters can be very thin (Stream Pairs rows are
+   *    ~1% of the board apart), so detect() tries several minGapFrac values
+   *    and lets scoreGrid() choose.
    *  - The result is validated: tiles in a grid are similar in size, so a
    *    high coefficient of variation means the projection was not a grid.
    *
    * Returns [[start, end], ...] in fractions, or null.
    */
-  function segmentsFromProjection(proj) {
+  function segmentsFromProjection(proj, minGapFrac = 0.012) {
     const n = proj.length;
     const p = smooth(proj);
     const top = percentile(p, 0.95);
@@ -86,7 +89,7 @@
       if (!on && start >= 0) { runs.push([start, i]); start = -1; }
     }
     if (!runs.length) return null;
-    const minGap = Math.max(1, Math.round(n * 0.012));
+    const minGap = Math.max(1, Math.round(n * minGapFrac));
     const merged = [runs[0]];
     for (let k = 1; k < runs.length; k++) {
       const last = merged[merged.length - 1];
@@ -119,13 +122,21 @@
     let e0 = 0;
     for (let i = 0; i < n; i++) e0 += e[i] * e[i];
     if (!e0) return 0;
+    const ac = new Float32Array(maxLag + 2);
     for (let lag = minLag; lag <= maxLag; lag++) {
       let s = 0;
       for (let i = 0; i + lag < n; i++) s += e[i] * e[i + lag];
       s /= e0 * ((n - lag) / n);
+      ac[lag] = s;
       if (s > best) { best = s; bestLag = lag; }
     }
     if (best < 0.25 || !bestLag) return 0;
+    // Multiples of the true period correlate as well as the period itself
+    // (2x or 3x the tile pitch also lines tiles up). Prefer the SMALLEST lag
+    // that is a local peak and nearly as strong as the best one.
+    for (let lag = minLag + 1; lag < bestLag; lag++) {
+      if (ac[lag] >= 0.85 * best && ac[lag] >= ac[lag - 1] && ac[lag] >= ac[lag + 1]) { bestLag = lag; break; }
+    }
     const count = Math.round(n / bestLag);
     return count >= 2 && count <= 15 ? count : 0;
   }
@@ -205,7 +216,7 @@
   function detect(img) {
     const { data, width: W, height: H } = img;
     if (W < 20 || H < 20) return null;
-    const s = Math.max(1, Math.floor(W / 320));
+    const s = Math.max(1, Math.floor(W / 480));
     const nx = Math.floor(W / s), ny = Math.floor(H / s);
 
     // Edge-energy projections (independent of the background guess).
@@ -239,15 +250,25 @@
       }
       for (let i = 0; i < nx; i++) col[i] /= ny;
       for (let i = 0; i < ny; i++) row[i] /= nx;
-      let colSegs = segmentsFromProjection(col);
-      let rowSegs = segmentsFromProjection(row);
-      let periodic = 0;
-      if (!colSegs) { colSegs = periodicSegs(colEdge); periodic++; }
-      if (!rowSegs) { rowSegs = periodicSegs(rowEdge); periodic++; }
-      if (!colSegs || !rowSegs) continue;
-      const score = scoreGrid(colSegs, rowSegs, W, H, periodic);
-      if (!best || score > best.score) {
-        best = { score, colSegs, rowSegs, bg: bg.map((v) => Math.round(v)), source: periodic ? 'auto-periodic' : 'auto-projection' };
+      // Each axis: try several gutter widths, plus the periodicity fallback.
+      const options = (proj, edge) => {
+        const out = [];
+        for (const g of [0.003, 0.008, 0.015, 0.025]) {
+          const segs = segmentsFromProjection(proj, g);
+          if (segs && !out.some((o) => o.segs.length === segs.length)) out.push({ segs, periodic: 0 });
+        }
+        const per = periodicSegs(edge);
+        if (per) out.push({ segs: per, periodic: 1 });
+        return out;
+      };
+      for (const cx of options(col, colEdge)) {
+        for (const ry of options(row, rowEdge)) {
+          const periodic = cx.periodic + ry.periodic;
+          const score = scoreGrid(cx.segs, ry.segs, W, H, periodic);
+          if (!best || score > best.score) {
+            best = { score, colSegs: cx.segs, rowSegs: ry.segs, bg: bg.map((v) => Math.round(v)), source: periodic ? 'auto-periodic' : 'auto-projection' };
+          }
+        }
       }
     }
     if (!best) return null;
