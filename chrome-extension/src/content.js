@@ -105,7 +105,7 @@
     if (changed) { C.lastMini = mini; C.lastFrame = frame; }
 
     const t = Date.now();
-    if (!C.grid) { await tryStartLevel(frame, t); return; }
+    if (!C.grid) { await tryStartLevel(frame, t); apTick(); return; }
 
     const events = C.memory.update(changed ? frame : C.lastFrame, t, C.S, !changed);
     if (events.some((e) => e.type === 'levelReset')) {
@@ -119,6 +119,7 @@
     if (C.memory.frozen) {
       C.status = 'board changing… (paused)';
       renderUI(frame);
+      apTick();
       return;
     }
     if (events.length) {
@@ -140,10 +141,13 @@
     const tilesInPlay = C.memory.tiles.filter((x) => x.state !== 'matched' && x.state !== 'gone').length;
     C.status = `${frame.source === 'video' ? 'video' : 'tab'} · ${C.grid.rows}×${C.grid.cols} · ${tilesInPlay} left`;
     renderUI(frame);
-    // AUTOPLAY-TEST: test auto-play on your own hosted game (src/autoplay.js)
-    if (SP.autoplay && SP.autoplay.tick) {
-      SP.autoplay.tick(C).then((note) => { if (note !== C.apNote) { C.apNote = note; renderUI(); } }, () => {});
-    }
+    apTick();
+  }
+
+  // AUTOPLAY-TEST: test auto-play on your own hosted game (src/autoplay.js)
+  function apTick() {
+    if (!SP.autoplay || !SP.autoplay.tick) return;
+    SP.autoplay.tick(C).then((note) => { if (note !== C.apNote) { C.apNote = note; renderUI(); } });
   }
 
   /** Forget the current board and wait until a new face-down board is visible. */

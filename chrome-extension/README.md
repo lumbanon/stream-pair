@@ -185,6 +185,15 @@ anything more, it tells you to use **Needs teaching**.
 3. Tick **Auto-play on my streampairs.com host screen** and set the interval (default 5 s).
 4. Start a game on `streampairs.com/en/system` and start scanning as usual.
 
+### If it doesn't type
+- The popup shows **Game tab: …**, the latest auto-play status from the game tab, for
+  example `waiting for cards 12, 40 to settle`, `next guess in 3 s`, or an error. The same
+  text appears in the floating panel.
+- **Test chat** connects to your channel's chat and joins it without posting. If it fails,
+  the problem is the token or the connection, not the board detection.
+- If the popup says there's no status yet, auto-play isn't running in the game tab. Press
+  F5 on the tab after reloading the extension, then press Start.
+
 The token is stored only in this browser's extension storage. To revoke it, go to
 <https://www.twitch.tv/settings/connections>.
 

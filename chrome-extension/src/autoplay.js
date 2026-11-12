@@ -24,6 +24,7 @@
   if (SP.autoplay) return;
 
   const KEY = 'autoplay';
+  const NOTE_KEY = 'autoplayNote'; // last status from the game tab, shown in the popup
   const GUESS_RE = /^\d{1,3} \d{1,3}$/;
   const MIN_GAP_MS = 1500;
   const isWorker = typeof document === 'undefined' && typeof importScripts === 'function';
@@ -85,6 +86,16 @@
       return joined;
     }
 
+    /** Connect and join the own channel, without posting anything. */
+    async function testConnection() {
+      const cfg = await loadCfg();
+      if (!cfg.token || !cfg.login) return { ok: false, error: 'No validated token. Save one first.' };
+      const v = await validate(cfg.token);
+      if (!v.ok) return v;
+      await connect(cleanToken(cfg.token), cfg.login);
+      return { ok: true, login: cfg.login };
+    }
+
     async function say(text, sender) {
       const cfg = await loadCfg();
       if (!cfg.enabled) return { ok: false, error: 'Auto-play is switched off.' };
@@ -95,14 +106,17 @@
       const wait = lastSentAt + MIN_GAP_MS - Date.now();
       if (wait > 0) return { ok: false, error: 'Too soon after the previous message.' };
       await connect(cleanToken(cfg.token), cfg.login);
+      if (!ws || ws.readyState !== WebSocket.OPEN) return { ok: false, error: 'Twitch chat connection dropped, retrying.' };
       ws.send(`PRIVMSG #${cfg.login} :${text}`);
       lastSentAt = Date.now();
       return { ok: true };
     }
 
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-      if (!msg || (msg.type !== 'autoplay:validate' && msg.type !== 'autoplay:say')) return false;
-      const job = msg.type === 'autoplay:validate' ? validate(msg.token) : say(String(msg.text || ''), sender);
+      if (!msg || !['autoplay:validate', 'autoplay:say', 'autoplay:test'].includes(msg.type)) return false;
+      const job = msg.type === 'autoplay:validate' ? validate(msg.token)
+        : msg.type === 'autoplay:test' ? testConnection()
+        : say(String(msg.text || ''), sender);
       job.then(sendResponse, (e) => sendResponse({ ok: false, error: String((e && e.message) || e) }));
       return true;
     });
@@ -121,6 +135,16 @@
         : 'No token saved. Needs a Twitch token with scopes chat:read and chat:edit.');
     };
     loadCfg().then((cfg) => show(cfg));
+    const showLast = (v) => { $('apLast').textContent = v ? `Game tab: ${v}` : 'Game tab: no auto-play status yet (is scanning running on the host screen?)'; };
+    chrome.storage.local.get(NOTE_KEY).then((r) => showLast(r[NOTE_KEY]));
+    chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch[NOTE_KEY]) showLast(ch[NOTE_KEY].newValue); });
+    $('apTest').addEventListener('click', async () => {
+      $('apStatus').textContent = 'Connecting to Twitch chat…';
+      const r = await chrome.runtime.sendMessage({ type: 'autoplay:test' });
+      $('apStatus').textContent = r && r.ok
+        ? `Connected: joined #${r.login}. Nothing was posted.`
+        : `Chat test failed: ${(r && r.error) || 'no answer from the extension (reload it)'}`;
+    });
     $('apSave').addEventListener('click', async () => {
       const token = cleanToken($('apToken').value);
       if (!token) { show(await loadCfg(), 'Paste a token first.'); return; }
@@ -173,8 +197,22 @@
     return null;
   }
 
+  let published = null;
+  const publish = (note) => {
+    if (note === published) return note;
+    published = note;
+    try { Promise.resolve(chrome.storage.local.set({ [NOTE_KEY]: note || '' })).catch(() => {}); } catch (e) { /* page closing */ }
+    return note;
+  };
+
   /** Called by content.js after each analysed frame. Returns a status note for the panel. */
   async function tick(C) {
+    try { return publish(await step(C)); } catch (e) {
+      return publish(`Auto-play error: ${String((e && e.message) || e).slice(0, 120)}`);
+    }
+  }
+
+  async function step(C) {
     const cfg = st.cfg;
     if (!cfg || !cfg.enabled) return '';
     if (!onHostScreen) return 'Auto-play: only on the streampairs.com host screen';
