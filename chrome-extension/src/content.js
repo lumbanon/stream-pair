@@ -234,7 +234,8 @@
 
   function recompute() {
     if (!C.grid) { C.result = { known: [], half: [] }; C.summary = { known: [], half: [] }; return; }
-    C.result = SP.matcher.findPairs(C.memory.rememberedTiles(), { pairs: C.learner.pairs, nonPairs: C.learner.nonPairs }, C.S, C.memory.tiles);
+    C.result = SP.matcher.findPairs(C.memory.rememberedTiles(),
+      { pairs: C.learner.pairs, nonPairs: C.learner.nonPairs, levelIdentical: C.learner.stats.identical > 0 }, C.S, C.memory.tiles);
     C.summary = SP.matcher.summarize(C.result);
   }
 

@@ -110,7 +110,11 @@ analysed frame by more than `frameDiff`.
   pair `{hashA, hashB, thumbA, thumbB, timesSeen}` is saved. When both flip back, they
   can be saved as a non-pair. Remembered tiles X and Y are suggested when some saved pair
   has X≈A and Y≈B (or the reverse).
-- **Auto** tries both, preferring identical matches.
+- **Auto** tries both, preferring identical matches. A level is treated as identical once
+  an identical match has been confirmed in it, or once 3 or more identical pairs are on
+  the board. From then on, auto-learned complement pairs are ignored in that level
+  (pairs you taught still count). Leftover cards that are each other's closest picture
+  are offered as **likely** pairs.
 
 Only complement pairs go into the database. Identical levels need no learning, so the
 gallery stays empty while you play them. To keep the database clean:

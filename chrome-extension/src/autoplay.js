@@ -181,10 +181,17 @@
     if (!C.running || !C.grid || C.memory.frozen) return 'Auto-play: waiting for a board';
     const now = Date.now();
     if (C.memory.levelId !== st.level) { st.level = C.memory.levelId; st.tried.clear(); }
+    const last = st.note ? ` (last: ${st.note.replace(/^Auto-play /, '')})` : '';
     // Let the previous guess finish: nothing face-up or flipping, then a short pause.
-    if (C.memory.tiles.some((t) => t.state === 'flipping' || t.state === 'revealed')) { st.lastBusy = now; return st.note; }
-    if (st.sending || now < st.backoffUntil) return st.note;
-    if (now - st.lastBusy < 1500 || now - st.lastSent < (cfg.intervalSec || 5) * 1000) return st.note;
+    const busy = C.memory.tiles.filter((t) => t.state === 'flipping' || t.state === 'revealed');
+    if (busy.length) {
+      st.lastBusy = now;
+      return `Auto-play: waiting for card${busy.length > 1 ? 's' : ''} ${busy.slice(0, 4).map((t) => t.num).join(', ')} to settle${last}`;
+    }
+    if (st.sending) return 'Auto-play: sending…';
+    if (now < st.backoffUntil) return `${st.note} · retry in ${Math.ceil((st.backoffUntil - now) / 1000)} s`;
+    const due = Math.max(st.lastBusy + 1500, st.lastSent + (cfg.intervalSec || 5) * 1000);
+    if (now < due) return `Auto-play: next guess in ${Math.ceil((due - now) / 1000)} s${last}`;
     const g = choose(C);
     if (!g) {
       return C.result.stuck && C.result.stuck.length

@@ -335,13 +335,30 @@
                 if (!tile.silent) events.push({ type: 'reveal', tile: tile.i, t });
                 tile.silent = false;
               }
-              // neither a card nor empty (something drawn over it): keep waiting
+              // Neither a card nor empty (dimmed / checked-off solved card,
+              // placeholder, effect drawn over it). Wait a while, then take it
+              // out of play so it cannot block anything forever.
+              else if (t - tile.flipStart > 8000) {
+                tile.state = 'matched';
+                tile.matchedAt = t;
+                tile.matchedBy = 'unclear';
+                tile.silent = false;
+              }
             }
             break;
           }
 
           case 'revealed':
-            if (!settled) break;
+            if (!settled) {
+              // A face-up card that keeps moving (match animation) is solved.
+              if (t - tile.revealedAt > S.matchPersistMs + 4000) {
+                tile.state = 'matched';
+                tile.matchedAt = t;
+                tile.matchedBy = 'persist';
+                events.push({ type: 'matched', tile: tile.i, t });
+              }
+              break;
+            }
             if (back) {
               tile.state = 'hidden';
               events.push({ type: 'hide', tile: tile.i, t });

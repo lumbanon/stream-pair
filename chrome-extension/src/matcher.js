@@ -43,8 +43,14 @@
 
     // For each tile, which learned entries/sides it resembles.
     const sideHits = new Map(); // tile.i -> [{ entry, side: 'a'|'b', d }]
-    // Pairs you taught by hand always count, even in Identical mode.
-    const entries = mode === 'identical' ? (db.pairs || []).filter((e) => e.source === 'teach') : (db.pairs || []);
+    // A level is either identical or complement. In Auto, once it is clearly
+    // an identical level (an identical match confirmed in-game, or 3+
+    // identical pairs on the board) auto-learned complement pairs are ignored:
+    // they can only produce wrong suggestions there. Pairs you taught by hand
+    // always count, in every mode.
+    const identicalLevel = mode === 'identical' ||
+      (mode === 'auto' && (db.levelIdentical || cands.filter((c) => c.kind === 'identical').length >= 3));
+    const entries = identicalLevel ? (db.pairs || []).filter((e) => e.source === 'teach') : (db.pairs || []);
     if (entries.length) {
       for (const t of tiles) {
         const hits = [];
@@ -82,6 +88,30 @@
       if (used.has(p.a.i) || used.has(p.b.i)) continue;
       used.add(p.a.i); used.add(p.b.i);
       known.push(p);
+    }
+
+    // Identical level, leftovers: two unpaired cards that are each other's
+    // nearest picture, within 1.4x the normal cut-off, are offered as a
+    // "likely" pair (same picture framed or lit a bit differently).
+    if (identicalLevel) {
+      const relaxed = { ...S, pictureMax: (S.pictureMax || 34) * 1.4, hashThreshold: S.hashThreshold + 3, histMin: Math.max(0, S.histMin - 0.1) };
+      const left = tiles.filter((t) => !used.has(t.i));
+      const dist = (a, b) => { const r = c(a.fp, b.fp, relaxed); return r.near ? (r.t != null ? r.t : r.d * 4) : Infinity; };
+      const nearest = new Map();
+      for (const a of left) {
+        let best = null, bd = Infinity;
+        for (const b of left) { if (a === b) continue; const d = dist(a, b); if (d < bd) { bd = d; best = b; } }
+        if (best) nearest.set(a.i, { b: best, d: bd });
+      }
+      for (const a of left) {
+        const na = nearest.get(a.i);
+        if (!na || used.has(a.i) || used.has(na.b.i)) continue;
+        const nb = nearest.get(na.b.i);
+        if (nb && nb.b === a) {
+          used.add(a.i); used.add(na.b.i);
+          known.push({ a, b: na.b, kind: 'likely', score: na.d });
+        }
+      }
     }
     known.sort((p, q) => Math.min(p.a.num, p.b.num) - Math.min(q.a.num, q.b.num));
     known.forEach((p, k) => { p.color = COLORS[k % COLORS.length]; });
